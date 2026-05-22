@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from "react";
+import AnimatedLogin from "./AnimatedLogin";
 
 /* BBB 2026 — Business Case Competition Portal
    Light theme · Role-scoped views · KST countdown */
@@ -137,6 +138,14 @@ function useCountdown(target){
   return{d:Math.floor(d/864e5),h:Math.floor((d%864e5)/36e5),m:Math.floor((d%36e5)/6e4),s:Math.floor((d%6e4)/1e3)};
 }
 
+function relTime(ts){
+  const d=Date.now()-ts;
+  if(d<60000)return"Just now";
+  if(d<3600000)return`${Math.floor(d/60000)}m ago`;
+  if(d<86400000)return`${Math.floor(d/3600000)}h ago`;
+  return`${Math.floor(d/86400000)}d ago`;
+}
+
 function CountdownWidget(){
   const left=useCountdown(DL);
   if(!left) return(
@@ -175,7 +184,7 @@ function LoginScreen({onLogin}){
     onLogin({name:name.trim(),role,team:team?parseInt(team):null});
   };
   return(
-    <div style={{minHeight:"100vh",background:"linear-gradient(155deg,#EEF0F8 0%,#F8F6FF 45%,#F0F4FF 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'DM Sans','Pretendard',-apple-system,sans-serif"}}>
+    <div style={{minHeight:"100vh",background:"linear-gradient(155deg,#EEF0F8 0%,#F8F6FF 45%,#F0F4FF 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"Arial,sans-serif"}}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Space+Mono:wght@400;700&display=swap');*{box-sizing:border-box;margin:0;padding:0}body{background:#F4F5FA;margin:0}input:focus,textarea:focus,select:focus{outline:none}::placeholder{color:#9298B2}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#D0D3E0;border-radius:3px}@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}@keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}`}</style>
       <div style={{width:"100%",maxWidth:400,animation:"fadeUp 0.5s ease"}}>
         <div style={{textAlign:"center",marginBottom:34}}>
@@ -219,24 +228,27 @@ function LoginScreen({onLogin}){
 
 export default function BBBPortal(){
   const[user,setUser]=useState(null);const[tab,setTab]=useState("home");const[teams,setTeams]=useState(mkTeams);
+  const[submissions,setSubmissions]=useState(()=>Array.from({length:TN.length},(_,i)=>({teamId:i+1,submitted:false,by:null,ts:null})));
   const BASE_TS = 1737129600000;
   const[qna,setQna]=useState([
-    {id:1,q:"What should we bring for the overnight stay?",by:"Student 3",tm:1,a:"Bring toiletries, a change of clothes, laptop + charger. Bedding is provided.",aBy:"Admin",ts:BASE_TS-3600000},
-    {id:2,q:"Can we use external data sources?",by:"Student 15",tm:2,a:"Yes, any publicly available data. No proprietary databases.",aBy:"Admin",ts:BASE_TS-1800000},
-    {id:3,q:"Is there Wi-Fi at the venue?",by:"Student 40",tm:5,a:null,aBy:null,ts:BASE_TS-600000},
+    {id:1,q:"What should we bring for the overnight stay?",by:"Student 3",tm:1,a:"Bring toiletries, a change of clothes, laptop + charger. Bedding is provided.",aBy:"Admin",ts:BASE_TS-3600000,category:"logistics"},
+    {id:2,q:"Can we use external data sources?",by:"Student 15",tm:2,a:"Yes, any publicly available data. No proprietary databases.",aBy:"Admin",ts:BASE_TS-1800000,category:"rules"},
+    {id:3,q:"Is there Wi-Fi at the venue?",by:"Student 40",tm:5,a:null,aBy:null,ts:BASE_TS-600000,category:"logistics"},
   ]);
   const[ann,setAnn]=useState([
     {id:1,title:"Welcome to BBB 2026!",body:"We're excited to have all 20 teams compete. Check the schedule and transport info carefully.",author:"Admin",ts:BASE_TS-86400000,pinned:true},
     {id:2,title:"Bus Reminder",body:"Main bus departs 8:00 AM sharp from 종합운동장역. Arrive by 7:45. Backup: 광역버스 7001 at 8:15 or 8:45.",author:"Admin",ts:BASE_TS-43200000,pinned:false},
   ]);
   const[moreOpen,setMoreOpen]=useState(false);
-  if(!user)return <LoginScreen onLogin={setUser}/>;
+  if(!user)return <AnimatedLogin onLogin={setUser}/>;
   const chk=(tid,sid)=>setTeams(p=>p.map(tm=>tm.id===tid?{...tm,students:tm.students.map(st=>st.id===sid?{...st,checkedIn:!st.checkedIn}:st)}:tm));
+  const setSubmissionStatus=(teamId,submitted,byName)=>setSubmissions(p=>p.map(x=>x.teamId===teamId?{...x,submitted,by:byName,ts:Date.now()}:x));
   const nav=[
     {id:"home",label:"Home",icon:I.Home},{id:"schedule",label:"Schedule",icon:I.Cal},{id:"teams",label:"Teams",icon:I.Ppl},
     {id:"transport",label:"Transport",icon:I.Bus},{id:"venue",label:"Venue",icon:I.Map},
     {id:"rooms",label:user.role===ROLES.ADMIN?"Rooms":"My Room",icon:I.Bed},
-    {id:"contacts",label:"Contacts",icon:I.Phn},{id:"checkin",label:"Check-in",icon:I.Chk},
+    {id:"contacts",label:"Contacts",icon:I.Phn},{id:"submission",label:"Submission Status",icon:I.Chk},{id:"checkin",label:"Check-in",icon:I.Chk},
+    ...(user.role===ROLES.ADMIN?[{id:"students",label:"Students",icon:I.Ppl}]:[]),
     {id:"qna",label:"Q&A",icon:I.Msg},{id:"announcements",label:"Announce",icon:I.Bell},
   ];
   const pages={
@@ -246,12 +258,14 @@ export default function BBBPortal(){
     transport:<PgTransport/>,venue:<PgVenue/>,
     rooms:<PgRooms user={user} teams={teams}/>,
     contacts:<PgContacts teams={teams}/>,
+    submission:<PgSubmission user={user} teams={teams} submissions={submissions} onUpdate={setSubmissionStatus}/>,
     checkin:<PgCheckin user={user} teams={teams} onChk={chk}/>,
-    qna:<PgQna user={user} items={qna} onAns={(id,a)=>setQna(p=>p.map(x=>x.id===id?{...x,a,aBy:user.name}:x))} onAsk={q=>setQna(p=>[...p,{id:Date.now(),q,by:user.name,tm:user.team,a:null,aBy:null,ts:Date.now()}])}/>,
-    announcements:<PgAnn user={user} items={ann} onAdd={(ti,bo)=>setAnn(p=>[{id:Date.now(),title:ti,body:bo,author:user.name,ts:Date.now(),pinned:false},...p])}/>,
+    students:user.role===ROLES.ADMIN?<PgStudents teams={teams}/>:null,
+    qna:<PgQna user={user} items={qna} onAns={(id,a)=>setQna(p=>p.map(x=>x.id===id?{...x,a,aBy:user.name}:x))} onAsk={(q,cat)=>setQna(p=>[...p,{id:Date.now(),q,by:user.name,tm:user.team,a:null,aBy:null,ts:Date.now(),category:cat||"general"}])}/>,
+    announcements:<PgAnn user={user} items={ann} onAdd={(ti,bo)=>setAnn(p=>[{id:Date.now(),title:ti,body:bo,author:user.name,ts:Date.now(),pinned:false},...p])} onPin={(id)=>setAnn(p=>p.map(x=>x.id===id?{...x,pinned:!x.pinned}:x))} onEdit={(id,ti,bo)=>setAnn(p=>p.map(x=>x.id===id?{...x,title:ti,body:bo}:x))} onDel={(id)=>setAnn(p=>p.filter(x=>x.id!==id))}/>,
   };
   return(
-    <div style={{minHeight:"100vh",background:s.bg,color:s.txt,fontFamily:"'DM Sans','Pretendard',-apple-system,sans-serif",display:"flex"}}>
+    <div style={{minHeight:"100vh",background:s.bg,color:s.txt,fontFamily:"Arial,sans-serif",display:"flex"}}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Space+Mono:wght@400;700&display=swap');*{box-sizing:border-box;margin:0;padding:0}body{background:#F4F5FA;margin:0}input:focus,textarea:focus,select:focus{outline:none}::placeholder{color:#9298B2}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#D0D3E0;border-radius:3px}@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}@keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}@media(max-width:768px){.sb{display:none!important}.mbn{display:flex!important}.mw{margin-left:0!important}}@media(min-width:769px){.mbn{display:none!important}}`}</style>
       <div className="sb" style={{width:216,height:"100vh",position:"fixed",left:0,top:0,background:"#fff",borderRight:`1px solid ${s.border}`,display:"flex",flexDirection:"column",zIndex:100,overflowY:"auto"}}>
         <div style={{padding:"16px 12px 12px",borderBottom:`1px solid ${s.borderLt}`}}>
@@ -445,20 +459,26 @@ function PgVenue(){return(
 
 function PgRooms({user,teams}){
   const myTm=user.team?teams.find(x=>x.id===user.team):null;
+  const[roomSrch,setRoomSrch]=useState("");
   if(user.role===ROLES.ADMIN){
     const byRoom={};
     teams.forEach(tm=>tm.students.forEach(st=>{const ra=RM[st.name];if(ra){if(!byRoom[ra.room])byRoom[ra.room]=[];byRoom[ra.room].push({...st,team:tm.name});}}));
     teams.forEach(tm=>{const ra=RM[tm.jm];if(ra){if(!byRoom[ra.room])byRoom[ra.room]=[];byRoom[ra.room].push({name:tm.jm,team:tm.name,isMentor:true});}});
     const sorted=Object.entries(byRoom).sort((a,b)=>a[0].localeCompare(b[0]));
+    const srchLow=roomSrch.toLowerCase();
+    const filtSorted=roomSrch.trim()?sorted.filter(([,ppl])=>ppl.some(p=>p.name.toLowerCase().includes(srchLow))):sorted;
     return(
       <div style={{animation:"fadeUp 0.4s ease"}}>
-        <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>All Room Assignments</h1><p style={{color:s.txt2,fontSize:13,marginBottom:18}}>Dormitory rooms (admin view)</p>
+        <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>All Room Assignments</h1><p style={{color:s.txt2,fontSize:13,marginBottom:12}}>Dormitory rooms (admin view)</p>
+        <div style={{position:"relative",marginBottom:16}}><div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:s.txtM}}><I.Srch/></div>
+          <input value={roomSrch} onChange={e=>setRoomSrch(e.target.value)} placeholder="Search by student or mentor name…" style={{width:"100%",padding:"10px 12px 10px 36px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:10,color:s.txt,fontSize:13,fontFamily:"inherit",boxShadow:s.sh}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
+        </div>
         <div style={{display:"grid",gap:8}}>
-          {sorted.map(([room,ppl])=>(
+          {filtSorted.map(([room,ppl])=>(
             <Card key={room} style={{padding:14}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:14,fontWeight:700,color:s.accent,fontFamily:"'Space Mono',monospace"}}>{room}</span><Badge color={s.txt2}>{ppl.length} people</Badge></div>
               <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                {ppl.map((p,i)=><span key={i} style={{padding:"3px 8px",borderRadius:5,background:p.isMentor?`${RC[ROLES.JM]}0C`:s.bg,color:p.isMentor?RC[ROLES.JM]:s.txt2,fontSize:11.5,fontWeight:p.isMentor?600:400,border:`1px solid ${s.borderLt}`}}>{p.name} <span style={{fontSize:10,color:s.txtM}}>({p.team})</span></span>)}
+                {ppl.map((p,i)=>{const isMatch=roomSrch.trim()&&p.name.toLowerCase().includes(srchLow);return<span key={i} style={{padding:"3px 8px",borderRadius:5,background:isMatch?"#FEF08A":p.isMentor?`${RC[ROLES.JM]}0C`:s.bg,color:isMatch?"#1B1F30":p.isMentor?RC[ROLES.JM]:s.txt2,fontSize:11.5,fontWeight:isMatch||p.isMentor?600:400,border:`1px solid ${s.borderLt}`}}>{p.name} <span style={{fontSize:10,color:isMatch?"#5A5F78":s.txtM}}>({p.team})</span></span>;})}
               </div>
             </Card>
           ))}
@@ -564,30 +584,38 @@ function PgCheckin({user,teams,onChk}){
 }
 
 function PgQna({user,items,onAns,onAsk}){
-  const[q,setQ]=useState("");const[ans,setAns]=useState({});const[fil,setFil]=useState("all");
+  const[q,setQ]=useState("");const[ans,setAns]=useState({});const[fil,setFil]=useState("all");const[catFil,setCatFil]=useState("all");const[qCat,setQCat]=useState("general");
   const canAns=user.role!==ROLES.STUDENT;
-  const list=items.filter(x=>{if(fil==="pending")return !x.a;if(fil==="answered")return !!x.a;return true;}).sort((a,b)=>b.ts-a.ts);
+  const unanswered=items.filter(x=>!x.a).length;
+  const list=items.filter(x=>{const stOk=fil==="all"||(fil==="pending"&&!x.a)||(fil==="answered"&&!!x.a);const cOk=catFil==="all"||x.category===catFil;return stOk&&cOk;}).sort((a,b)=>b.ts-a.ts);
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
-      <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Q&A Board</h1><p style={{color:s.txt2,fontSize:13,marginBottom:16}}>Public questions & answers — visible to everyone for fairness</p>
+      <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Q&A Board</h1><p style={{color:s.txt2,fontSize:13,marginBottom:12}}>Public questions & answers — visible to everyone for fairness</p>
+      {unanswered>0&&<div style={{background:s.errD,color:s.err,borderRadius:9,padding:"10px 14px",fontWeight:700,fontSize:13,marginBottom:14}}>{unanswered} question{unanswered>1?"s":""} {user.role===ROLES.ADMIN?"need your answer":"awaiting answer"}</div>}
       <Card style={{padding:14,marginBottom:16}}>
         <div style={{fontSize:11,fontWeight:600,color:s.txt2,marginBottom:7}}>Ask a Question</div>
-        <div style={{display:"flex",gap:6}}>
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Type your question…" onKeyDown={e=>e.key==="Enter"&&q.trim()&&(onAsk(q.trim()),setQ(""))}
+        <div style={{display:"flex",gap:6,marginBottom:6}}>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Type your question…" onKeyDown={e=>e.key==="Enter"&&q.trim()&&(onAsk(q.trim(),qCat),setQ(""))}
             style={{flex:1,padding:"10px 12px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:8,color:s.txt,fontSize:13,fontFamily:"inherit"}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
-          <button onClick={()=>{if(q.trim()){onAsk(q.trim());setQ("")}}} style={{padding:"10px 14px",borderRadius:8,border:"none",background:s.accent,color:"#fff",cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:12,display:"flex",alignItems:"center",gap:4}}><I.Send/>Ask</button>
+          <select value={qCat} onChange={e=>setQCat(e.target.value)} style={{padding:"10px 10px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:8,color:s.txt,fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>
+            {["logistics","rules","technical","general","other"].map(c=><option key={c} value={c}>{c[0].toUpperCase()+c.slice(1)}</option>)}
+          </select>
+          <button onClick={()=>{if(q.trim()){onAsk(q.trim(),qCat);setQ("")}}} style={{padding:"10px 14px",borderRadius:8,border:"none",background:s.accent,color:"#fff",cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:12,display:"flex",alignItems:"center",gap:4}}><I.Send/>Ask</button>
         </div>
-        <div style={{fontSize:10,color:s.txtM,marginTop:5}}>All Q&A visible to every participant.</div>
+        <div style={{fontSize:10,color:s.txtM,marginTop:3}}>All Q&A visible to every participant.</div>
       </Card>
-      <div style={{display:"flex",gap:5,marginBottom:12}}>
+      <div style={{display:"flex",gap:5,marginBottom:8,flexWrap:"wrap"}}>
         {[{id:"all",l:"All"},{id:"pending",l:`Pending (${items.filter(x=>!x.a).length})`},{id:"answered",l:"Answered"}].map(f=><Pill key={f.id} active={fil===f.id} onClick={()=>setFil(f.id)} style={{padding:"6px 12px",fontSize:11.5}}>{f.l}</Pill>)}
+      </div>
+      <div style={{display:"flex",gap:5,marginBottom:14,flexWrap:"wrap"}}>
+        {[{id:"all",l:"All Categories"},{id:"logistics",l:"Logistics"},{id:"rules",l:"Rules"},{id:"technical",l:"Technical"},{id:"general",l:"General"},{id:"other",l:"Other"}].map(f=><Pill key={f.id} active={catFil===f.id} onClick={()=>setCatFil(f.id)} color={s.info} style={{padding:"5px 10px",fontSize:11}}>{f.l}</Pill>)}
       </div>
       <div style={{display:"grid",gap:7}}>
         {list.map(x=>(
           <Card key={x.id} style={{padding:14,border:!x.a?`1px solid ${s.warn}28`:undefined}}>
             <div style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:4}}>
               <div style={{width:24,height:24,borderRadius:6,background:s.infoD,color:s.info,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,flexShrink:0,marginTop:1}}>Q</div>
-              <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,lineHeight:1.5}}>{x.q}</div><div style={{fontSize:11,color:s.txtM,marginTop:2}}>{x.by}{x.tm?` · Team ${x.tm}`:""} · {new Date(x.ts).toLocaleTimeString()}</div></div>
+              <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,lineHeight:1.5}}>{x.q}</div><div style={{fontSize:11,color:s.txtM,marginTop:2,display:"flex",alignItems:"center",gap:6}}><span>{x.by}{x.tm?` · Team ${x.tm}`:""} · {relTime(x.ts)}</span>{x.category&&<Badge color={s.info}>{x.category}</Badge>}</div></div>
               {!x.a&&<Badge color={s.warn}>Pending</Badge>}
             </div>
             {x.a&&<div style={{marginTop:6,marginLeft:32,padding:"9px 11px",borderRadius:8,background:s.okD,border:`1px solid ${s.ok}15`}}><div style={{fontSize:10,color:s.ok,fontWeight:700,marginBottom:2}}>ANSWERED BY {x.aBy?.toUpperCase()}</div><div style={{fontSize:12.5,color:s.txt,lineHeight:1.6}}>{x.a}</div></div>}
@@ -604,8 +632,38 @@ function PgQna({user,items,onAns,onAsk}){
   );
 }
 
-function PgAnn({user,items,onAdd}){
+function PgAnn({user,items,onAdd,onPin,onEdit,onDel}){
   const[ti,setTi]=useState("");const[bo,setBo]=useState("");const isAd=user.role===ROLES.ADMIN;
+  const[editMap,setEditMap]=useState({});const[editVals,setEditVals]=useState({});
+  const startEdit=(a)=>{setEditMap(p=>({...p,[a.id]:true}));setEditVals(p=>({...p,[a.id]:{ti:a.title,bo:a.body}}));};
+  const cancelEdit=(id)=>setEditMap(p=>({...p,[id]:false}));
+  const saveEdit=(id)=>{const v=editVals[id];if(v&&v.ti.trim()&&v.bo.trim()){onEdit(id,v.ti.trim(),v.bo.trim());setEditMap(p=>({...p,[id]:false}));}};
+  const renderAnn=(a,pinned)=>{
+    if(isAd&&editMap[a.id]){
+      const v=editVals[a.id]||{ti:a.title,bo:a.body};
+      return(
+        <Card key={a.id} style={{padding:14,marginBottom:8}}>
+          <input value={v.ti} onChange={e=>setEditVals(p=>({...p,[a.id]:{...p[a.id],ti:e.target.value}}))} style={{width:"100%",padding:"8px 10px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:7,color:s.txt,fontSize:13,fontFamily:"inherit",marginBottom:6}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
+          <textarea value={v.bo} onChange={e=>setEditVals(p=>({...p,[a.id]:{...p[a.id],bo:e.target.value}}))} rows={3} style={{width:"100%",padding:"8px 10px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:7,color:s.txt,fontSize:13,fontFamily:"inherit",resize:"vertical",marginBottom:6,lineHeight:1.5,whiteSpace:"pre-wrap"}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
+          <div style={{display:"flex",gap:6}}><button onClick={()=>saveEdit(a.id)} style={{padding:"7px 14px",borderRadius:7,border:"none",background:s.ok,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Save</button><button onClick={()=>cancelEdit(a.id)} style={{padding:"7px 14px",borderRadius:7,border:`1px solid ${s.border}`,background:"#fff",color:s.txt2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button></div>
+        </Card>
+      );
+    }
+    return(
+      <Card key={a.id} style={{padding:pinned?16:14,marginBottom:pinned?8:6,background:pinned?`linear-gradient(135deg,${s.warn}05,${s.warn}02)`:"#fff",border:pinned?`1.5px solid ${s.warn}22`:undefined}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:4}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,flex:1}}>{pinned&&<Badge color={s.warn}>Pinned</Badge>}<span style={{fontSize:pinned?14:13.5,fontWeight:pinned?700:600}}>{a.title}</span></div>
+          {isAd&&<div style={{display:"flex",gap:4,flexShrink:0}}>
+            <button onClick={()=>onPin(a.id)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${s.border}`,background:"#fff",color:a.pinned?s.warn:s.txt2,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{a.pinned?"Unpin":"Pin"}</button>
+            <button onClick={()=>startEdit(a)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${s.border}`,background:"#fff",color:s.accent,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Edit</button>
+            <button onClick={()=>window.confirm("Delete this announcement?")&&onDel(a.id)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${s.err}30`,background:s.errD,color:s.err,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Del</button>
+          </div>}
+        </div>
+        <p style={{fontSize:13,color:s.txt2,lineHeight:1.6,marginBottom:4,whiteSpace:"pre-wrap"}}>{a.body}</p>
+        <div style={{fontSize:11,color:s.txtM}}>Posted by {a.author} · {relTime(a.ts)} · {new Date(a.ts).toLocaleDateString()}</div>
+      </Card>
+    );
+  };
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
       <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Announcements</h1><p style={{color:s.txt2,fontSize:13,marginBottom:16}}>Official updates from the organizers</p>
@@ -613,22 +671,12 @@ function PgAnn({user,items,onAdd}){
         <Card style={{padding:16,marginBottom:18}}>
           <div style={{fontSize:11,fontWeight:600,color:s.txt2,marginBottom:8}}>Post New Announcement</div>
           <input value={ti} onChange={e=>setTi(e.target.value)} placeholder="Title…" style={{width:"100%",padding:"10px 12px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:8,color:s.txt,fontSize:13,fontFamily:"inherit",marginBottom:7}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
-          <textarea value={bo} onChange={e=>setBo(e.target.value)} placeholder="Write your announcement…" rows={3} style={{width:"100%",padding:"10px 12px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:8,color:s.txt,fontSize:13,fontFamily:"inherit",resize:"vertical",marginBottom:7,lineHeight:1.5}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
+          <textarea value={bo} onChange={e=>setBo(e.target.value)} placeholder="Write your announcement…" rows={3} style={{width:"100%",padding:"10px 12px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:8,color:s.txt,fontSize:13,fontFamily:"inherit",resize:"vertical",marginBottom:7,lineHeight:1.5,whiteSpace:"pre-wrap"}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
           <button onClick={()=>{if(ti.trim()&&bo.trim()){onAdd(ti.trim(),bo.trim());setTi("");setBo("")}}} style={{padding:"9px 20px",borderRadius:8,border:"none",background:s.accent,color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Post</button>
         </Card>
       )}
-      {items.filter(a=>a.pinned).map(a=>(
-        <Card key={a.id} style={{padding:16,marginBottom:8,background:`linear-gradient(135deg,${s.warn}05,${s.warn}02)`,border:`1.5px solid ${s.warn}22`}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}><Badge color={s.warn}>Pinned</Badge><span style={{fontSize:14,fontWeight:700}}>{a.title}</span></div>
-          <p style={{fontSize:13,color:s.txt2,lineHeight:1.6,marginBottom:4}}>{a.body}</p><div style={{fontSize:11,color:s.txtM}}>Posted by {a.author} · {new Date(a.ts).toLocaleDateString()}</div>
-        </Card>
-      ))}
-      {items.filter(a=>!a.pinned).map(a=>(
-        <Card key={a.id} style={{padding:14,marginBottom:6}}>
-          <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>{a.title}</div>
-          <p style={{fontSize:13,color:s.txt2,lineHeight:1.6,marginBottom:4}}>{a.body}</p><div style={{fontSize:11,color:s.txtM}}>Posted by {a.author} · {new Date(a.ts).toLocaleDateString()}</div>
-        </Card>
-      ))}
+      {items.filter(a=>a.pinned).map(a=>renderAnn(a,true))}
+      {items.filter(a=>!a.pinned).map(a=>renderAnn(a,false))}
     </div>
   );
 }
@@ -660,6 +708,177 @@ function PgContacts({teams}){
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function PgSubmission({user,teams,submissions,onUpdate}){
+  const data=teams.map(tm=>{
+    const rec=submissions.find(x=>x.teamId===tm.id);
+    return{
+      teamId:tm.id,
+      name:tm.name,
+      jm:tm.jm,
+      submitted:rec?.submitted||false,
+      by:rec?.by||null,
+      ts:rec?.ts||null,
+    };
+  });
+  const totalSubmitted=data.filter(x=>x.submitted).length;
+  const canAdmin=user.role===ROLES.ADMIN;
+  const canStudent=user.role===ROLES.STUDENT;
+  const myTeamId=user.team||null;
+  return(
+    <div style={{animation:"fadeUp 0.4s ease"}}>
+      <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Submission Status</h1>
+      <p style={{color:s.txt2,fontSize:13,marginBottom:16}}>Track which teams have submitted their presentations.</p>
+      <Card style={{padding:"12px 16px",marginBottom:16,display:"inline-flex",flexDirection:"column",gap:2}}>
+        <div style={{fontSize:10,color:s.txtM,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}}>Overall</div>
+        <div style={{fontSize:18,fontWeight:700,color:totalSubmitted===data.length?s.ok:s.accent,fontFamily:"'Space Mono',monospace"}}>
+          {totalSubmitted}/{data.length} teams submitted
+        </div>
+      </Card>
+      <div style={{display:"grid",gap:8}}>
+        {data.map(t=>{
+          const isMine=t.teamId===myTeamId;
+          const canToggle=canAdmin||(canStudent&&isMine);
+          const label=t.submitted?"Submitted":"Not Submitted";
+          const badgeColor=t.submitted?s.ok:s.warn;
+          const btnLabel=t.submitted?"Mark as Not Submitted":"Mark as Submitted";
+          const info=t.by?`Marked by ${t.by}`:null;
+          const time=t.ts?new Date(t.ts).toLocaleTimeString():null;
+          return(
+            <Card key={t.teamId} style={{padding:14,border:t.submitted?`1.5px solid ${s.ok}35`:undefined,background:t.submitted?s.okD:"#fff"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:700}}>{t.name}</div>
+                  <div style={{fontSize:11.5,color:s.txtM}}>Mentor: {t.jm}</div>
+                </div>
+                <Badge color={badgeColor}>{label}</Badge>
+              </div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                <div style={{fontSize:11.5,color:s.txt2}}>
+                  {info&&<span>{info}{time?` · ${time}`:""}</span>}
+                  {!info&&<span>{t.submitted?"Submitted":"Waiting for submission"}</span>}
+                  {canStudent&&isMine&&!t.submitted&&<span style={{display:"block",marginTop:2,color:s.txtM}}>Anyone on your team can mark the submission once uploaded.</span>}
+                </div>
+                <button
+                  disabled={!canToggle}
+                  onClick={()=>canToggle&&onUpdate(t.teamId,!t.submitted,user.name)}
+                  style={{
+                    padding:"8px 12px",
+                    borderRadius:8,
+                    border:"none",
+                    background:canToggle?(t.submitted?s.warn:s.ok):(s.bg),
+                    color:canToggle?"#fff":s.txtM,
+                    fontSize:12,
+                    fontWeight:600,
+                    cursor:canToggle?"pointer":"default",
+                    fontFamily:"inherit",
+                    whiteSpace:"nowrap",
+                  }}
+                >
+                  {btnLabel}
+                </button>
+              </div>
+              {!canToggle&&(
+                <div style={{marginTop:6,fontSize:10.5,color:s.txtM}}>
+                  Submission status is read-only for your role.
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function mkStudentDetail(st,team,idx){
+  const phones=["010-1234-5678","010-2345-6789","010-3456-7890","010-4567-8901","010-5678-9012"];
+  const insurers=["Samsung Fire","Hyundai Marine","DB Insurance","KB Insurance","Lotte Insurance"];
+  const transports=["Main Bus (8:00 AM)","Personal Vehicle","Backup Bus (8:15 AM)","Personal Vehicle","Main Bus (8:00 AM)"];
+  const emergencyNames=["Park Jiyeon","Kim Minsu","Lee Jieun","Choi Hyunwoo","Jung Sooyeon"];
+  const emergencyRels=["Mother","Father","Mother","Father","Mother"];
+  return{
+    ...st,team,
+    phone:phones[idx%phones.length],
+    email:`student${idx+1}@bbb.org`,
+    room:RM[st.name]?.room||"TBA",
+    floor:RM[st.name]?.floor||"—",
+    insurance:insurers[idx%insurers.length],
+    transport:transports[idx%transports.length],
+    emergencyName:emergencyNames[idx%emergencyNames.length],
+    emergencyRel:emergencyRels[idx%emergencyRels.length],
+    emergencyPhone:phones[(idx+2)%phones.length],
+  };
+}
+
+function PgStudents({teams}){
+  const[srch,setSrch]=useState("");const[sel,setSel]=useState(null);
+  const allStudents=[];
+  teams.forEach(tm=>tm.students.forEach((st,j)=>allStudents.push(mkStudentDetail(st,tm,allStudents.length))));
+  const srchLow=srch.toLowerCase();
+  const filtered=srch.trim()?allStudents.filter(st=>st.name.toLowerCase().includes(srchLow)):allStudents;
+  if(sel){
+    return(
+      <div style={{animation:"fadeUp 0.4s ease"}}>
+        <button onClick={()=>setSel(null)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",borderRadius:8,border:`1px solid ${s.border}`,background:"#fff",color:s.txt2,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:18}}>← Back</button>
+        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:20}}>
+          <div style={{width:52,height:52,borderRadius:13,background:s.accentD,color:s.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:700,fontFamily:"'Space Mono',monospace"}}>{sel.name[0]}</div>
+          <div><div style={{fontSize:22,fontWeight:700,letterSpacing:"-0.01em"}}>{sel.name}</div><div style={{fontSize:13,color:s.txt2,marginTop:2}}>{sel.team.name} · <Badge color={RC[ROLES.STUDENT]}>Student</Badge></div></div>
+          <div style={{marginLeft:"auto"}}><Badge color={sel.checkedIn?s.ok:s.warn}>{sel.checkedIn?"Checked In":"Not Checked In"}</Badge></div>
+        </div>
+        <div style={{display:"grid",gap:10}}>
+          <Card style={{padding:16}}>
+            <div style={{fontSize:11,fontWeight:700,color:s.txtM,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:10}}>Contact</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Phone</div><div style={{fontSize:13,fontWeight:600}}>{sel.phone}</div></div>
+              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Email</div><div style={{fontSize:13,fontWeight:600}}>{sel.email}</div></div>
+            </div>
+          </Card>
+          <Card style={{padding:16}}>
+            <div style={{fontSize:11,fontWeight:700,color:s.txtM,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:10}}>Room & Team</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Dorm Room</div><div style={{fontSize:13,fontWeight:600,fontFamily:"'Space Mono',monospace",color:s.accent}}>{sel.room}</div><div style={{fontSize:11,color:s.txt2}}>{sel.floor}</div></div>
+              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Work Room</div><div style={{fontSize:13,fontWeight:600}}>{sel.team.workRoom}</div><div style={{fontSize:11,color:s.txt2}}>{sel.team.name}</div></div>
+            </div>
+          </Card>
+          <Card style={{padding:16}}>
+            <div style={{fontSize:11,fontWeight:700,color:s.txtM,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:10}}>Logistics</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Transport</div><div style={{fontSize:13,fontWeight:600}}>{sel.transport}</div></div>
+              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Insurance</div><div style={{fontSize:13,fontWeight:600}}>{sel.insurance}</div></div>
+            </div>
+          </Card>
+          <Card style={{padding:16}}>
+            <div style={{fontSize:11,fontWeight:700,color:s.txtM,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:10}}>Emergency Contact</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Name</div><div style={{fontSize:13,fontWeight:600}}>{sel.emergencyName}</div></div>
+              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Relationship</div><div style={{fontSize:13,fontWeight:600}}>{sel.emergencyRel}</div></div>
+              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Phone</div><div style={{fontSize:13,fontWeight:600}}>{sel.emergencyPhone}</div></div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+  return(
+    <div style={{animation:"fadeUp 0.4s ease"}}>
+      <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Students</h1><p style={{color:s.txt2,fontSize:13,marginBottom:16}}>All {allStudents.length} participants (admin view)</p>
+      <div style={{position:"relative",marginBottom:16}}><div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:s.txtM}}><I.Srch/></div>
+        <input value={srch} onChange={e=>setSrch(e.target.value)} placeholder="Search by student name…" style={{width:"100%",padding:"10px 12px 10px 36px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:10,color:s.txt,fontSize:13,fontFamily:"inherit",boxShadow:s.sh}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
+      </div>
+      <div style={{display:"grid",gap:4}}>
+        {filtered.map((st,i)=>(
+          <button key={st.id} onClick={()=>setSel(st)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:9,border:`1px solid ${s.border}`,background:"#fff",cursor:"pointer",fontFamily:"inherit",textAlign:"left",color:s.txt,boxShadow:s.sh}} onMouseEnter={e=>e.currentTarget.style.boxShadow=s.shL} onMouseLeave={e=>e.currentTarget.style.boxShadow=s.sh}>
+            <div style={{width:32,height:32,borderRadius:8,background:s.accentD,color:s.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,flexShrink:0}}>{st.name[0]}</div>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{st.name}</div><div style={{fontSize:11.5,color:s.txt2}}>{st.team.name}</div></div>
+            <Badge color={st.checkedIn?s.ok:s.warn}>{st.checkedIn?"In":"—"}</Badge>
+            <span style={{color:s.txtM}}><I.Rt/></span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
