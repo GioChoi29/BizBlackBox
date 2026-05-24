@@ -2,6 +2,52 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --accent: #6c5ce7;
+  --accent-bright: #8472f2;
+  --ink: #14161d;
+  --bg: #ffffff;
+  --surface: #fafafb;
+  --surface-border: #ececef;
+  --muted: #5c6273;
+  --radius: 18px;
+  --radius-sm: 12px;
+  --pill: 100px;
+}
+
 * {
-  font-family: Arial, sans-serif;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Archivo', sans-serif;
+  background: #fff;
+  color: #14161d;
+  -webkit-font-smoothing: antialiased;
+}
+
+input:focus, textarea:focus, select:focus { outline: none; }
+::placeholder { color: #9298B2; }
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D0D3E0; border-radius: 3px; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@media (max-width: 768px) {
+  .sb  { display: none !important; }
+  .mbn { display: flex !important; }
+  .mw  { margin-left: 0 !important; }
+}
+@media (min-width: 769px) {
+  .mbn { display: none !important; }
 }

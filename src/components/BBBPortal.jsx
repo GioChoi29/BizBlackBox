@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import AnimatedLogin from "./AnimatedLogin";
 
 /* BBB 2026 — Business Case Competition Portal
@@ -78,24 +78,52 @@ const VENUE = [
 ];
 
 const s = {
-  bg:"#F4F5FA",surfHov:"#F0F1F8",border:"#E0E2EE",borderLt:"#ECEDF5",
-  txt:"#1B1F30",txt2:"#5A5F78",txtM:"#9298B2",
-  accent:"#4F6BF6",accentD:"rgba(79,107,246,0.07)",
+  bg:"#ffffff",surf:"#fafafb",surfHov:"#f1f1f4",
+  border:"#ececef",borderLt:"#f2f2f5",
+  txt:"#14161d",txt2:"#5c6273",txtM:"#9298B2",
+  accent:"#6c5ce7",accentBright:"#8472f2",accentD:"rgba(108,92,231,0.07)",
   ok:"#0DA678",okD:"rgba(13,166,120,0.07)",
   warn:"#D97706",warnD:"rgba(217,119,6,0.07)",
   err:"#E04555",errD:"rgba(224,69,85,0.07)",
   info:"#3B82F6",infoD:"rgba(59,130,246,0.07)",
-  sh:"0 1px 3px rgba(26,29,46,0.06),0 1px 2px rgba(26,29,46,0.03)",
-  shL:"0 4px 16px rgba(26,29,46,0.07)",
+  sh:"0 1px 3px rgba(20,22,29,0.06),0 1px 2px rgba(20,22,29,0.03)",
+  shL:"0 4px 16px rgba(20,22,29,0.08)",
 };
 const TC = {
-  transport:{bg:s.infoD,txt:"#2563EB",dot:"#3B82F6"},
-  logistics:{bg:"rgba(90,95,120,0.06)",txt:s.txt2,dot:s.txtM},
-  ceremony:{bg:s.warnD,txt:"#B45309",dot:s.warn},
-  competition:{bg:s.accentD,txt:s.accent,dot:s.accent},
-  break:{bg:s.okD,txt:"#0B8F68",dot:s.ok},
-  mentoring:{bg:"rgba(124,92,219,0.07)",txt:"#7C5CDB",dot:"#7C5CDB"},
+  transport:{dot:s.accent,label:"Transport"},
+  logistics:{dot:s.txtM,label:"Logistics"},
+  ceremony:{dot:s.accent,label:"Ceremony"},
+  competition:{dot:s.accent,label:"Competition"},
+  break:{dot:"#afafbf",label:"Break"},
+  mentoring:{dot:s.accent,label:"Mentoring"},
 };
+
+function CubeBg({color,style:st}){
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(!ref.current)return;
+    const NS="http://www.w3.org/2000/svg";
+    const svg=document.createElementNS(NS,"svg");
+    svg.setAttribute("viewBox","-200 -200 400 400");
+    svg.style.width="100%";svg.style.height="100%";
+    const N=22,half=150,depthLayers=22;
+    for(let d=0;d<depthLayers;d++){
+      const dz=d/(depthLayers-1),persp=0.55+dz*0.45,span=half*persp,shift=(1-dz)*40;
+      for(let i=0;i<N;i++)for(let j=0;j<N;j++){
+        const onRing=(i===0||j===0||i===N-1||j===N-1),isFace=(d===0||d===depthLayers-1);
+        if(!onRing&&!isFace)continue;
+        const x=((i/(N-1))*2-1)*span-shift,y=((j/(N-1))*2-1)*span-shift;
+        const c=document.createElementNS(NS,"circle");
+        c.setAttribute("cx",x.toFixed(1));c.setAttribute("cy",y.toFixed(1));
+        c.setAttribute("r",(0.7+dz*1.3).toFixed(2));
+        c.setAttribute("fill",color);c.setAttribute("opacity",(0.15+dz*0.6).toFixed(2));
+        svg.appendChild(c);
+      }
+    }
+    ref.current.innerHTML="";ref.current.appendChild(svg);
+  },[color]);
+  return <div ref={ref} style={st}/>;
+}
 
 const sv={width:20,height:20,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"};
 const I={
@@ -119,15 +147,33 @@ const I={
 };
 
 const Card=({children,style:st,hover})=>(
-  <div style={{background:"#fff",border:`1px solid ${s.border}`,borderRadius:14,boxShadow:s.sh,transition:"box-shadow 0.15s",...st}}
-    onMouseEnter={hover?e=>e.currentTarget.style.boxShadow=s.shL:undefined}
-    onMouseLeave={hover?e=>e.currentTarget.style.boxShadow=s.sh:undefined}>{children}</div>
+  <div style={{background:"#fafafb",border:"1px solid #ececef",borderRadius:18,transition:"transform 0.16s,box-shadow 0.16s",...st}}
+    onMouseEnter={hover?e=>{e.currentTarget.style.transform=hover==="x"?"translateX(3px)":"translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px rgba(20,22,29,0.07)";}:undefined}
+    onMouseLeave={hover?e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}:undefined}>{children}</div>
 );
 const Pill=({children,color=s.accent,active,onClick,style:st})=>(
-  <button onClick={onClick} style={{padding:"8px 16px",borderRadius:9,border:`1.5px solid ${active?color:s.border}`,background:active?`${color}0D`:"#fff",color:active?color:s.txt2,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",...st}}>{children}</button>
+  <button onClick={onClick} style={{padding:"8px 18px",borderRadius:12,border:`1.5px solid ${active?color:s.border}`,background:active?"#efedfb":"#fff",color:active?color:s.txt2,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all 0.13s",...st}}>{children}</button>
 );
 const Badge=({children,color})=>(
-  <span style={{display:"inline-block",padding:"2px 8px",borderRadius:5,background:`${color}12`,color,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.03em"}}>{children}</span>
+  <span style={{fontFamily:"'JetBrains Mono',monospace",display:"inline-block",padding:"2px 8px",borderRadius:6,background:`${color}12`,color,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>{children}</span>
+);
+const PageHeader=({eyebrow,children,mb=40})=>(
+  <div style={{marginBottom:mb}}>
+    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.2em",textTransform:"uppercase",color:s.accent,fontWeight:500,marginBottom:14}}>{eyebrow}</div>
+    <h1 style={{fontFamily:"'Archivo',sans-serif",fontWeight:800,fontSize:44,lineHeight:1,letterSpacing:"-0.035em",color:"#0d0f16"}}>{children}</h1>
+  </div>
+);
+const MonoTag=({children,style:st})=>(
+  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,color:s.accent,...st}}>{children}</span>
+);
+const SearchInput=({value,onChange,placeholder})=>(
+  <div style={{display:"flex",alignItems:"center",gap:12,background:"#fafafb",border:`1px solid ${s.border}`,borderRadius:12,padding:"16px 20px",marginBottom:26,transition:"border-color 0.14s,box-shadow 0.14s"}}
+    onFocusCapture={e=>{ e.currentTarget.style.borderColor=s.accent; e.currentTarget.style.boxShadow="0 0 0 3px rgba(108,92,231,0.12)"; }}
+    onBlurCapture={e=>{ e.currentTarget.style.borderColor=s.border; e.currentTarget.style.boxShadow="none"; }}>
+    <I.Srch style={{color:s.txtM,flexShrink:0}}/>
+    <input value={value} onChange={onChange} placeholder={placeholder}
+      style={{border:"none",outline:"none",background:"transparent",fontFamily:"'Archivo',sans-serif",fontSize:15,color:s.txt,width:"100%"}}/>
+  </div>
 );
 
 function useCountdown(target){
@@ -149,30 +195,34 @@ function relTime(ts){
 function CountdownWidget(){
   const left=useCountdown(DL);
   if(!left) return(
-    <Card style={{padding:"18px 20px",background:`linear-gradient(135deg,${s.err}06,${s.err}02)`,border:`1.5px solid ${s.err}22`}}>
+    <div style={{borderRadius:18,padding:"28px 32px",background:"linear-gradient(135deg,#16181f,#20232e)",color:"#fff",position:"relative",overflow:"hidden"}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <div style={{width:42,height:42,borderRadius:11,background:s.errD,color:s.err,display:"flex",alignItems:"center",justifyContent:"center"}}><I.Timer/></div>
-        <div><div style={{fontSize:11,fontWeight:700,color:s.err,textTransform:"uppercase",letterSpacing:"0.06em"}}>Submission Closed</div>
-        <div style={{fontSize:14,fontWeight:600,color:s.txt2,marginTop:2}}>The deadline has passed. Good luck!</div></div>
+        <div style={{width:40,height:40,borderRadius:11,background:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center"}}><I.Timer style={{color:"#fff"}}/></div>
+        <div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.18em",textTransform:"uppercase",fontWeight:500,color:"#fff"}}>Submission Closed</div>
+          <div style={{fontSize:14,color:"#fff",opacity:0.55,marginTop:3}}>The deadline has passed. Good luck!</div>
+        </div>
       </div>
-    </Card>
+    </div>
   );
   return(
-    <Card style={{padding:"18px 20px",background:`linear-gradient(135deg,${s.accent}05,rgba(124,92,219,0.03))`,border:`1.5px solid ${s.accent}1A`}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-        <div style={{width:42,height:42,borderRadius:11,background:s.accentD,color:s.accent,display:"flex",alignItems:"center",justifyContent:"center"}}><I.Timer/></div>
-        <div><div style={{fontSize:11,fontWeight:700,color:s.accent,textTransform:"uppercase",letterSpacing:"0.06em"}}>Submission Deadline</div>
-        <div style={{fontSize:13,color:s.txt2,marginTop:1}}>Aug 2, 2026 · 10:00 AM KST</div></div>
+    <div style={{borderRadius:18,padding:"28px 32px",background:"linear-gradient(135deg,#16181f,#20232e)",position:"relative",overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:22,position:"relative",zIndex:1}}>
+        <div style={{width:40,height:40,borderRadius:11,background:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,color:"#fff"}}><I.Timer style={{color:"#fff"}}/></div>
+        <div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.18em",textTransform:"uppercase",fontWeight:500,color:"#fff"}}>Submission Deadline</div>
+          <div style={{fontSize:14,color:"#fff",opacity:0.55,marginTop:3}}>Aug 2, 2026 · 10:00 AM KST</div>
+        </div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-        {[{l:"DAYS",v:left.d},{l:"HRS",v:left.h},{l:"MIN",v:left.m},{l:"SEC",v:left.s}].map(u=>(
-          <div key={u.l} style={{textAlign:"center",padding:"12px 4px",borderRadius:10,background:"rgba(79,107,246,0.05)"}}>
-            <div style={{fontSize:28,fontWeight:700,fontFamily:"'Space Mono',monospace",color:s.txt,lineHeight:1}}>{String(u.v).padStart(2,"0")}</div>
-            <div style={{fontSize:10,fontWeight:700,color:s.txtM,marginTop:4,letterSpacing:"0.08em"}}>{u.l}</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,position:"relative",zIndex:1}}>
+        {[{l:"Days",v:left.d},{l:"Hrs",v:left.h},{l:"Min",v:left.m},{l:"Sec",v:left.s}].map(u=>(
+          <div key={u.l} style={{borderRadius:12,padding:"20px 14px",textAlign:"center",background:"rgba(255,255,255,0.06)"}}>
+            <div style={{fontWeight:800,fontSize:44,lineHeight:1,fontFeatureSettings:'"tnum"',letterSpacing:"-0.02em",color:"#fff"}}>{String(u.v).padStart(2,"0")}</div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.16em",textTransform:"uppercase",marginTop:9,color:"#fff",opacity:0.5}}>{u.l}</div>
           </div>
         ))}
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -265,27 +315,45 @@ export default function BBBPortal(){
     announcements:<PgAnn user={user} items={ann} onAdd={(ti,bo)=>setAnn(p=>[{id:Date.now(),title:ti,body:bo,author:user.name,ts:Date.now(),pinned:false},...p])} onPin={(id)=>setAnn(p=>p.map(x=>x.id===id?{...x,pinned:!x.pinned}:x))} onEdit={(id,ti,bo)=>setAnn(p=>p.map(x=>x.id===id?{...x,title:ti,body:bo}:x))} onDel={(id)=>setAnn(p=>p.filter(x=>x.id!==id))}/>,
   };
   return(
-    <div style={{minHeight:"100vh",background:s.bg,color:s.txt,fontFamily:"Arial,sans-serif",display:"flex"}}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Space+Mono:wght@400;700&display=swap');*{box-sizing:border-box;margin:0;padding:0}body{background:#F4F5FA;margin:0}input:focus,textarea:focus,select:focus{outline:none}::placeholder{color:#9298B2}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#D0D3E0;border-radius:3px}@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}@keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}@media(max-width:768px){.sb{display:none!important}.mbn{display:flex!important}.mw{margin-left:0!important}}@media(min-width:769px){.mbn{display:none!important}}`}</style>
-      <div className="sb" style={{width:216,height:"100vh",position:"fixed",left:0,top:0,background:"#fff",borderRight:`1px solid ${s.border}`,display:"flex",flexDirection:"column",zIndex:100,overflowY:"auto"}}>
-        <div style={{padding:"16px 12px 12px",borderBottom:`1px solid ${s.borderLt}`}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-            <div style={{width:30,height:30,borderRadius:8,background:"linear-gradient(135deg,#4F6BF6,#7C5CDB)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#fff",fontFamily:"'Space Mono',monospace"}}>B</div>
-            <div><div style={{fontSize:14,fontWeight:700}}>BBB 2026</div><div style={{fontSize:10,color:s.txtM}}>Competition Portal</div></div>
-          </div>
-          <div style={{padding:"6px 8px",borderRadius:8,background:s.bg,display:"flex",alignItems:"center",gap:7}}>
-            <div style={{width:24,height:24,borderRadius:6,background:`${RC[user.role]}10`,color:RC[user.role],display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700}}>{user.name[0]}</div>
-            <div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{user.name}</div><div style={{fontSize:10,color:RC[user.role],fontWeight:600}}>{RL[user.role]}</div></div>
-          </div>
+    <div style={{minHeight:"100vh",background:"#fff",color:s.txt,fontFamily:"'Archivo',sans-serif",display:"flex"}}>
+      {/* Sidebar */}
+      <div className="sb" style={{width:270,height:"100vh",position:"fixed",left:0,top:0,background:"#fbfbfc",borderRight:"1px solid #ebebee",display:"flex",flexDirection:"column",padding:"28px 20px",zIndex:100,overflowY:"auto"}}>
+        {/* Brand */}
+        <div style={{display:"flex",alignItems:"center",gap:13,padding:"0 10px 26px"}}>
+          <div style={{width:44,height:44,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:9,lineHeight:0.9,border:"2px solid #14161d",color:"#14161d",borderRadius:10,transform:"rotate(-3deg)",fontFamily:"'Archivo',sans-serif"}}>BLK<br/>BOX</div>
+          <div><div style={{fontWeight:800,fontSize:17,letterSpacing:"-0.01em",color:"#14161d"}}>BBB 2026</div><div style={{fontSize:10,letterSpacing:"0.16em",textTransform:"uppercase",color:"#14161d",opacity:0.42,marginTop:3}}>Competition</div></div>
         </div>
-        <nav style={{padding:"5px 5px",flex:1}}>
-          {nav.map(n=>{const a=tab===n.id;const Ic=n.icon;return <button key={n.id} onClick={()=>setTab(n.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,border:"none",background:a?s.accentD:"transparent",color:a?s.accent:s.txt2,fontSize:12.5,fontWeight:a?600:500,cursor:"pointer",fontFamily:"inherit",marginBottom:1,textAlign:"left"}} onMouseEnter={e=>{if(!a)e.currentTarget.style.background=s.surfHov}} onMouseLeave={e=>{if(!a)e.currentTarget.style.background="transparent"}}><Ic/>{n.label}</button>;})}
+        {/* User chip */}
+        <div style={{display:"flex",alignItems:"center",gap:12,padding:13,borderRadius:12,marginBottom:24,background:"#f1f1f4"}}>
+          <div style={{width:38,height:38,borderRadius:10,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:15,background:"linear-gradient(135deg,#6c5ce7,#8472f2)",color:"#fff"}}>{user.name[0]}</div>
+          <div><div style={{fontWeight:700,fontSize:14,color:"#14161d"}}>{user.name}</div><div style={{fontSize:10,letterSpacing:"0.13em",textTransform:"uppercase",color:s.accent,fontWeight:700,marginTop:2}}>{RL[user.role]}</div></div>
+        </div>
+        {/* Nav */}
+        <nav style={{display:"flex",flexDirection:"column",gap:3,flex:1}}>
+          {nav.map(n=>{const a=tab===n.id;const Ic=n.icon;return(
+            <button key={n.id} onClick={()=>setTab(n.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:13,padding:"11px 14px",borderRadius:12,border:"none",background:a?"#efedfb":"transparent",color:a?"#14161d":s.txt2,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left",transition:"all 0.13s"}}
+              onMouseEnter={e=>{if(!a)e.currentTarget.style.background="#f1f1f4";}}
+              onMouseLeave={e=>{if(!a)e.currentTarget.style.background="transparent";}}>
+              <span style={{width:18,textAlign:"center",color:a?s.accent:"currentColor",opacity:a?1:0.7}}><Ic/></span>
+              {n.label}
+            </button>
+          );})}
         </nav>
-        <div style={{padding:"8px 5px",borderTop:`1px solid ${s.borderLt}`}}>
-          <button onClick={()=>setUser(null)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,border:"none",background:"transparent",color:s.txtM,fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}} onMouseEnter={e=>{e.currentTarget.style.background=s.errD;e.currentTarget.style.color=s.err}} onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=s.txtM}}><I.Out/>Log Out</button>
-        </div>
+        {/* Logout */}
+        <button onClick={()=>setUser(null)} style={{display:"flex",alignItems:"center",gap:13,padding:14,border:"none",background:"transparent",color:s.txt2,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",opacity:0.7}}
+          onMouseEnter={e=>{e.currentTarget.style.opacity=1;e.currentTarget.style.color=s.err;}}
+          onMouseLeave={e=>{e.currentTarget.style.opacity=0.7;e.currentTarget.style.color=s.txt2;}}>
+          <I.Out/>Log Out
+        </button>
       </div>
-      <div className="mw" style={{marginLeft:216,flex:1,minHeight:"100vh"}}><div style={{maxWidth:880,margin:"0 auto",padding:"20px 20px 100px"}}>{pages[tab]}</div></div>
+
+      {/* Main content */}
+      <div className="mw" style={{marginLeft:270,flex:1,minHeight:"100vh",position:"relative"}}>
+        {/* Cube background (home page only — shown globally but subtle) */}
+        <CubeBg color="#6c5ce7" style={{position:"absolute",top:-40,right:-90,width:460,height:460,zIndex:0,opacity:0.12,pointerEvents:"none"}}/>
+        <div style={{position:"absolute",width:440,height:440,top:-190,right:-90,borderRadius:"50%",filter:"blur(100px)",background:"rgba(108,92,231,0.08)",zIndex:0,pointerEvents:"none"}}/>
+        <div style={{position:"relative",zIndex:2,maxWidth:900,margin:"0 auto",padding:"50px 60px 100px"}}>{pages[tab]}</div>
+      </div>
       <div className="mbn" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:`1px solid ${s.border}`,display:"none",justifyContent:"space-around",padding:"6px 2px",zIndex:100}}>
         {nav.slice(0,5).map(n=>{const a=tab===n.id;const Ic=n.icon;return <button key={n.id} onClick={()=>setTab(n.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:"4px 5px",border:"none",borderRadius:6,background:a?s.accentD:"transparent",color:a?s.accent:s.txtM,fontSize:9,fontWeight:500,cursor:"pointer",fontFamily:"inherit",minWidth:48}}><Ic/>{n.label}</button>;})}
         <div style={{position:"relative"}}>
@@ -306,36 +374,90 @@ function PgHome({user,teams,ann,setTab}){
   const tot=teams.reduce((a,x)=>a+x.students.length,0);
   const chkd=teams.reduce((a,x)=>a+x.students.filter(st=>st.checkedIn).length,0);
   const isAd=user.role===ROLES.ADMIN;
+  const statCards=[
+    {l:"Teams",v:"20",accent:false},
+    {l:"Participants",v:String(tot),accent:false},
+    ...(isAd?[{l:"Checked In",v:`${chkd}/${tot}`,accent:true}]:[]),
+    ...(myTm?[{l:"Team Check-in",v:`${myTm.students.filter(st=>st.checkedIn).length}/${myTm.students.length}`,accent:true}]:[]),
+  ];
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
-      <div style={{marginBottom:24}}><h1 style={{fontSize:26,fontWeight:700,marginBottom:3,letterSpacing:"-0.02em"}}>Welcome, {user.name}</h1><p style={{color:s.txt2,fontSize:14}}>{RL[user.role]}{myTm?` — ${myTm.name}`:""}</p></div>
-      <div style={{marginBottom:16}}><CountdownWidget/></div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:10,marginBottom:22}}>
-        {[{l:"Teams",v:"20",cl:s.accent},{l:"Participants",v:String(tot),cl:s.info},...(isAd?[{l:"Checked In",v:`${chkd}/${tot}`,cl:s.ok}]:[]),...(myTm?[{l:"Team Check-in",v:`${myTm.students.filter(st=>st.checkedIn).length}/${myTm.students.length}`,cl:s.ok}]:[])].map((x,i)=>(
-          <Card key={i} style={{padding:"14px 16px"}}><div style={{fontSize:10,color:s.txtM,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:4}}>{x.l}</div><div style={{fontSize:22,fontWeight:700,color:x.cl,fontFamily:"'Space Mono',monospace"}}>{x.v}</div></Card>
+      {/* Page header */}
+      <div style={{marginBottom:40}}>
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.2em",textTransform:"uppercase",color:s.accent,fontWeight:500,marginBottom:14}}>
+          {RL[user.role]} Dashboard
+        </div>
+        <h1 style={{fontFamily:"'Archivo',sans-serif",fontWeight:800,fontSize:52,lineHeight:0.95,letterSpacing:"-0.035em",color:"#0d0f16"}}>
+          Welcome back, <em style={{fontFamily:"'Fraunces',serif",fontStyle:"italic",fontWeight:400,letterSpacing:"-0.01em",color:s.accent}}>{user.name}</em>
+        </h1>
+      </div>
+
+      {/* Countdown */}
+      <div style={{marginBottom:26}}><CountdownWidget/></div>
+
+      {/* Stat cards */}
+      <div style={{display:"grid",gridTemplateColumns:`repeat(${statCards.length},1fr)`,gap:16,marginBottom:42}}>
+        {statCards.map((x,i)=>(
+          <div key={i} style={{
+            borderRadius:18,padding:"26px 28px",
+            background:x.accent?"linear-gradient(135deg,#efedfb,#f6f5fe)":"#fafafb",
+            border:`1px solid ${x.accent?"#e0dbf8":"#ececef"}`,
+            transition:"transform 0.18s,box-shadow 0.18s",
+          }}
+            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 10px 26px rgba(20,23,31,0.07)";}}
+            onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.16em",textTransform:"uppercase",opacity:0.5,marginBottom:14,fontWeight:500,color:s.txt}}>{x.l}</div>
+            <div style={{fontWeight:800,fontSize:40,lineHeight:1,letterSpacing:"-0.02em",color:x.accent?s.accent:"#0d0f16"}}>{x.v}</div>
+          </div>
         ))}
       </div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:22}}>
-        {[{l:"Schedule",t:"schedule",cl:s.accent},{l:"Transport",t:"transport",cl:s.info},{l:"Ask a Question",t:"qna",cl:s.ok},{l:"Contacts",t:"contacts",cl:s.warn}].map((a,i)=>(
-          <button key={i} onClick={()=>setTab(a.t)} style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${a.cl}22`,background:`${a.cl}08`,color:a.cl,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{a.l}</button>
+
+      {/* Quick action pills */}
+      <div style={{display:"flex",flexWrap:"wrap",gap:12,marginBottom:46}}>
+        <button onClick={()=>setTab("schedule")} style={{fontWeight:700,fontSize:13,letterSpacing:"0.02em",padding:"13px 24px",borderRadius:100,cursor:"pointer",border:"none",background:s.accent,color:"#fff",transition:"all 0.14s"}}
+          onMouseEnter={e=>{e.currentTarget.style.background=s.accentBright;e.currentTarget.style.transform="translateY(-1px)";}}
+          onMouseLeave={e=>{e.currentTarget.style.background=s.accent;e.currentTarget.style.transform="";}}>
+          Schedule
+        </button>
+        {[{l:"Transport",t:"transport"},{l:"Ask a Question",t:"qna"},{l:"Contacts",t:"contacts"}].map((a,i)=>(
+          <button key={i} onClick={()=>setTab(a.t)} style={{fontWeight:700,fontSize:13,letterSpacing:"0.02em",padding:"13px 24px",borderRadius:100,cursor:"pointer",border:"1px solid #dadade",background:"#fff",color:s.txt,transition:"all 0.14s"}}
+            onMouseEnter={e=>e.currentTarget.style.background="#f5f5f6"}
+            onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+            {a.l}
+          </button>
         ))}
       </div>
-      <Card style={{padding:16,marginBottom:16}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><h2 style={{fontSize:14,fontWeight:600,display:"flex",alignItems:"center",gap:6}}><I.Bell/>Announcements</h2><button onClick={()=>setTab("announcements")} style={{fontSize:11,color:s.accent,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>View All</button></div>
+
+      {/* Announcements */}
+      <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:20}}>
+        <div style={{fontFamily:"'Fraunces',serif",fontWeight:600,fontSize:26,letterSpacing:"-0.01em",color:"#0d0f16"}}>Announcements</div>
+        <button onClick={()=>setTab("announcements")} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",fontWeight:500,color:s.accent,background:"none",border:"none",cursor:"pointer"}}>View All →</button>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
         {ann.slice(0,2).map(a=>(
-          <div key={a.id} style={{padding:"10px 12px",borderRadius:9,background:s.bg,marginBottom:6,border:`1px solid ${s.borderLt}`}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>{a.pinned&&<Badge color={s.warn}>Pinned</Badge>}<span style={{fontSize:13,fontWeight:600}}>{a.title}</span></div>
-            <p style={{fontSize:12,color:s.txt2,lineHeight:1.5}}>{a.body}</p>
+          <div key={a.id} style={{borderRadius:18,padding:"22px 26px",position:"relative",background:"#fafafb",border:"1px solid #ececef",transition:"transform 0.16s",cursor:"default"}}
+            onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
+            onMouseLeave={e=>e.currentTarget.style.transform=""}>
+            {a.pinned&&<div style={{position:"absolute",left:0,top:22,bottom:22,width:3,borderRadius:3,background:s.accent}}/>}
+            <div style={{marginBottom:6}}>
+              {a.pinned&&<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,color:s.accent,marginRight:12}}>Pinned</span>}
+              <span style={{fontWeight:700,fontSize:16,color:s.txt}}>{a.title}</span>
+            </div>
+            <p style={{fontSize:14,lineHeight:1.55,color:s.txt,opacity:0.6}}>{a.body}</p>
           </div>
         ))}
-      </Card>
+      </div>
+
+      {/* My Team (non-admin) */}
       {myTm&&(
-        <Card style={{padding:16}}><h2 style={{fontSize:14,fontWeight:600,marginBottom:10}}>My Team — {myTm.name}</h2>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Junior Mentor</div><div style={{fontSize:13,fontWeight:600}}>{myTm.jm}</div><div style={{fontSize:11,color:s.txt2}}>{myTm.jmPhone}</div></div>
-            <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Work Room</div><div style={{fontSize:13,fontWeight:600}}>{myTm.workRoom}</div></div>
+        <div style={{marginTop:26,borderRadius:18,padding:"22px 26px",background:"#fafafb",border:"1px solid #ececef"}}>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.16em",textTransform:"uppercase",color:s.accent,fontWeight:500,marginBottom:14}}>My Team</div>
+          <div style={{fontWeight:800,fontSize:22,letterSpacing:"-0.02em",marginBottom:16,color:"#0d0f16"}}>{myTm.name}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+            <div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.1em",textTransform:"uppercase",color:s.txt2,opacity:0.6,marginBottom:4}}>Junior Mentor</div><div style={{fontSize:14,fontWeight:600,color:s.txt}}>{myTm.jm}</div><div style={{fontSize:12,color:s.txt2,marginTop:2}}>{myTm.jmPhone}</div></div>
+            <div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.1em",textTransform:"uppercase",color:s.txt2,opacity:0.6,marginBottom:4}}>Work Room</div><div style={{fontSize:14,fontWeight:600,color:s.txt}}>{myTm.workRoom}</div></div>
           </div>
-        </Card>
+        </div>
       )}
     </div>
   );
@@ -346,36 +468,51 @@ function PgSchedule({user,teams}){
   const items=SCHED.filter(x=>x.day===day);const myP=user.team?PRELIM.find(p=>p.teams.includes(user.team)):null;
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
-      <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Competition Schedule</h1><p style={{color:s.txt2,fontSize:13,marginBottom:20}}>Full 2-day event timeline</p>
-      <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
+      <PageHeader eyebrow="Event Timeline">Competition Schedule</PageHeader>
+      <div style={{display:"flex",gap:8,marginBottom:24,flexWrap:"wrap"}}>
         {[1,2].map(d=><Pill key={d} active={day===d&&!prelim} onClick={()=>{setDay(d);setPrelim(false)}}>Day {d}</Pill>)}
-        <Pill color={s.warn} active={prelim} onClick={()=>setPrelim(!prelim)}>Prelim Schedule</Pill>
+        <Pill active={prelim} onClick={()=>setPrelim(!prelim)}>Prelim Slots</Pill>
       </div>
       {prelim?(
-        <div>
-          {myP&&<Card style={{padding:14,marginBottom:14,border:`1.5px solid ${s.accent}40`,background:`${s.accent}06`}}><div style={{fontSize:11,fontWeight:700,color:s.accent,marginBottom:2}}>Your Prelim Slot</div><div style={{fontSize:14,fontWeight:600}}>{myP.time} — {myP.room}</div></Card>}
-          <div style={{display:"grid",gap:8}}>
-            {PRELIM.map((sl,i)=>(
-              <Card key={i} style={{padding:14,border:sl.teams.includes(user.team)?`1.5px solid ${s.accent}50`:undefined}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><span style={{fontSize:14,fontWeight:700,fontFamily:"'Space Mono',monospace",color:s.accent}}>{sl.time}</span><Badge color={s.txt2}>{sl.room}</Badge></div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                  {sl.teams.map(tid=>{const tm=teams.find(x=>x.id===tid);const mine=tid===user.team;return <span key={tid} style={{padding:"3px 8px",borderRadius:5,background:mine?s.accentD:s.bg,color:mine?s.accent:s.txt2,fontSize:11.5,fontWeight:mine?700:500,border:`1px solid ${mine?`${s.accent}30`:s.borderLt}`}}>{tm?.name}</span>;})}
-                </div>
-              </Card>
-            ))}
-          </div>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {myP&&(
+            <div style={{borderRadius:18,padding:"18px 24px",background:"#efedfb",border:"1.5px solid #e0dbf8",position:"relative",overflow:"hidden"}}>
+              <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:s.accent,borderRadius:"3px 0 0 3px"}}/>
+              <MonoTag style={{marginBottom:8,display:"block"}}>Your Prelim Slot</MonoTag>
+              <div style={{fontSize:18,fontWeight:800,letterSpacing:"-0.02em",color:"#0d0f16"}}>{myP.time}</div>
+              <div style={{fontSize:13,color:s.txt2,marginTop:4}}>{myP.room}</div>
+            </div>
+          )}
+          {PRELIM.map((sl,i)=>(
+            <Card key={i} style={{padding:"18px 22px",border:sl.teams.includes(user.team)?"1.5px solid #e0dbf8":undefined}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:700,color:s.accent}}>{sl.time}</span>
+                <MonoTag>{sl.room}</MonoTag>
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {sl.teams.map(tid=>{const tm=teams.find(x=>x.id===tid);const mine=tid===user.team;return(
+                  <span key={tid} style={{padding:"4px 10px",borderRadius:8,background:mine?"#efedfb":"#fff",color:mine?s.accent:s.txt2,fontSize:12,fontWeight:mine?700:500,border:`1px solid ${mine?"#e0dbf8":s.border}`}}>{tm?.name}</span>
+                );})}
+              </div>
+            </Card>
+          ))}
         </div>
       ):(
-        <div style={{position:"relative",paddingLeft:20}}>
-          <div style={{position:"absolute",left:5,top:6,bottom:6,width:2,background:`linear-gradient(180deg,${s.accent}30,${s.border})`,borderRadius:1}}/>
+        <div style={{position:"relative",paddingLeft:28}}>
+          <div style={{position:"absolute",left:5,top:14,bottom:14,width:2,background:"#e9e6f7",borderRadius:1}}/>
           {items.map((it,i)=>{const tc=TC[it.type]||TC.logistics;return(
-            <div key={i} style={{position:"relative",marginBottom:6,animation:`slideIn 0.3s ease ${i*0.03}s both`}}>
-              <div style={{position:"absolute",left:-17,top:15,width:8,height:8,borderRadius:"50%",background:tc.dot,border:`2px solid ${s.bg}`,boxShadow:`0 0 0 2px ${tc.dot}20`}}/>
-              <Card hover style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
-                <div style={{minWidth:50,fontFamily:"'Space Mono',monospace",fontSize:13,fontWeight:700,color:tc.txt}}>{it.time}</div>
-                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{it.ev}</div><div style={{fontSize:11,color:s.txtM,display:"flex",alignItems:"center",gap:2,marginTop:1}}><I.Pin/>{it.loc}</div></div>
-                <Badge color={tc.txt}>{it.type}</Badge>
-              </Card>
+            <div key={i} style={{position:"relative",marginBottom:14,animation:`slideIn 0.3s ease ${i*0.03}s both`}}>
+              <div style={{position:"absolute",left:-27,top:"50%",transform:"translateY(-50%)",width:12,height:12,borderRadius:"50%",background:"#fff",border:`3px solid ${s.accent}`}}/>
+              <div style={{display:"flex",alignItems:"center",gap:18,background:"#fafafb",border:"1px solid #ececef",borderRadius:14,padding:"13px 20px",transition:"transform 0.16s,box-shadow 0.16s",cursor:"default"}}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateX(3px)";e.currentTarget.style.boxShadow="0 8px 22px rgba(20,23,31,0.05)";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:12,color:s.accent,flexShrink:0,width:46}}>{it.time}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:700,fontSize:14,color:"#0d0f16",marginBottom:3}}>{it.ev}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:s.txt2}}><I.Pin/>{it.loc}</div>
+                </div>
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,color:s.accent,flexShrink:0}}>{tc.label}</span>
+              </div>
             </div>
           );})}
         </div>
@@ -389,20 +526,36 @@ function PgTeams({user,teams}){
   const filt=teams.filter(tm=>tm.name.toLowerCase().includes(srch.toLowerCase())||tm.jm.toLowerCase().includes(srch.toLowerCase()));
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
-      <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Teams</h1><p style={{color:s.txt2,fontSize:13,marginBottom:16}}>20 teams · 8 students each</p>
-      <div style={{position:"relative",marginBottom:16}}><div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:s.txtM}}><I.Srch/></div>
-        <input value={srch} onChange={e=>setSrch(e.target.value)} placeholder="Search teams or mentors…" style={{width:"100%",padding:"10px 12px 10px 36px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:10,color:s.txt,fontSize:13,fontFamily:"inherit",boxShadow:s.sh}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
-      </div>
-      <div style={{display:"grid",gap:6}}>
+      <PageHeader eyebrow="Participants">Teams &amp; Mentors</PageHeader>
+      <SearchInput value={srch} onChange={e=>setSrch(e.target.value)} placeholder="Search teams or mentors…"/>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {filt.map(tm=>{const open=exp===tm.id;const mine=tm.id===user.team;return(
-          <Card key={tm.id} style={{overflow:"hidden",border:mine?`1.5px solid ${s.accent}40`:undefined}}>
-            <button onClick={()=>setExp(open?null:tm.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"12px 14px",border:"none",background:"transparent",color:s.txt,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
-              <div style={{width:34,height:34,borderRadius:8,background:mine?s.accentD:s.bg,color:mine?s.accent:s.txt2,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,fontFamily:"'Space Mono',monospace",flexShrink:0}}>{tm.id}</div>
-              <div style={{flex:1}}><div style={{fontSize:13.5,fontWeight:600}}>{tm.name}</div><div style={{fontSize:11.5,color:s.txt2}}>Mentor: {tm.jm} · {tm.workRoom}</div></div>
-              <span style={{transform:open?"rotate(90deg)":"rotate(0)",transition:"transform 0.2s",color:s.txtM}}><I.Rt/></span>
+          <div key={tm.id} style={{borderRadius:18,background:"#fafafb",border:`1px solid ${mine?"#e0dbf8":"#ececef"}`,overflow:"hidden"}}>
+            <button onClick={()=>setExp(open?null:tm.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"13px 18px",border:"none",background:"transparent",color:s.txt,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+              <div style={{width:32,height:32,borderRadius:8,background:mine?"#efedfb":"#f1f1f4",color:mine?s.accent:s.txt2,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,flexShrink:0}}>{tm.id}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:700,color:"#0d0f16"}}>{tm.name}</div>
+                <div style={{fontSize:12,color:s.txt2,marginTop:2}}>Mentor: {tm.jm} · <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{tm.workRoom}</span></div>
+              </div>
+              {mine&&<MonoTag>My Team</MonoTag>}
+              <span style={{transform:open?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.2s",color:s.txtM}}><I.Rt/></span>
             </button>
-            {open&&<div style={{padding:"0 14px 12px",animation:"fadeUp 0.2s ease"}}><div style={{borderTop:`1px solid ${s.borderLt}`,paddingTop:10}}><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:4}}>{tm.students.map(st=><div key={st.id} style={{padding:"5px 9px",borderRadius:6,background:s.bg,border:`1px solid ${s.borderLt}`,fontSize:12,color:s.txt2}}>{st.name}</div>)}</div></div></div>}
-          </Card>
+            {open&&(
+              <div style={{padding:"0 22px 18px",animation:"fadeUp 0.2s ease"}}>
+                <div style={{borderTop:"1px solid #ececef",paddingTop:14}}>
+                  <MonoTag style={{display:"block",marginBottom:10,color:s.txt2}}>Students ({tm.students.length})</MonoTag>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:6}}>
+                    {tm.students.map(st=>(
+                      <div key={st.id} style={{padding:"7px 12px",borderRadius:10,background:"#fff",border:"1px solid #ececef",fontSize:13,color:s.txt2,display:"flex",alignItems:"center",gap:6}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:st.checkedIn?s.accent:s.border,flexShrink:0}}/>
+                        {st.name}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         );})}
       </div>
     </div>
@@ -411,52 +564,94 @@ function PgTeams({user,teams}){
 
 function PgTransport(){return(
   <div style={{animation:"fadeUp 0.4s ease"}}>
-    <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Transportation</h1><p style={{color:s.txt2,fontSize:13,marginBottom:20}}>Getting to the venue</p>
-    <Card style={{padding:20,marginBottom:12,background:`linear-gradient(135deg,${s.accent}05,${s.accent}02)`,border:`1.5px solid ${s.accent}22`}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-        <div style={{width:40,height:40,borderRadius:10,background:s.accentD,color:s.accent,display:"flex",alignItems:"center",justifyContent:"center"}}><I.Bus/></div>
-        <div><div style={{fontSize:11,color:s.accent,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em"}}>Main Bus — Recommended</div><div style={{fontSize:19,fontWeight:700,fontFamily:"'Space Mono',monospace"}}>08:00 AM</div></div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-        <div style={{padding:"10px 12px",borderRadius:8,background:`${s.accent}06`}}><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>PICKUP</div><div style={{fontSize:13,fontWeight:600}}>종합운동장역</div><div style={{fontSize:11,color:s.txt2}}>Sports Complex Station</div></div>
-        <div style={{padding:"10px 12px",borderRadius:8,background:`${s.accent}06`}}><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>CAPACITY</div><div style={{fontSize:13,fontWeight:600}}>4 buses</div><div style={{fontSize:11,color:s.txt2}}>Arrive 10 min early</div></div>
-      </div>
-      <div style={{padding:"8px 12px",borderRadius:7,background:s.warnD,fontSize:12,color:"#92400E",fontWeight:600}}>Please arrive by 7:45 AM. Buses depart at 8:00 AM sharp!</div>
-    </Card>
-    <Card style={{padding:16,marginBottom:12}}>
-      <h2 style={{fontSize:14,fontWeight:600,marginBottom:10,color:s.warn,display:"flex",alignItems:"center",gap:6}}><I.Clk/> Backup Options (If Late)</h2>
-      {[{r:"광역버스 7001",t:"08:15 AM",n:"If you miss the main bus"},{r:"광역버스 7001",t:"08:45 AM",n:"Last backup option"}].map((b,i)=>(
-        <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:8,background:s.bg,marginBottom:6,border:`1px solid ${s.borderLt}`}}>
-          <div style={{minWidth:52,fontSize:13,fontWeight:700,color:s.warn,fontFamily:"'Space Mono',monospace"}}>{b.t}</div>
-          <div><div style={{fontSize:13,fontWeight:600}}>{b.r}</div><div style={{fontSize:11,color:s.txt2}}>{b.n}</div></div>
+    <PageHeader eyebrow="Getting There">Transportation</PageHeader>
+    {/* Main bus — dark hero card */}
+    <div style={{borderRadius:18,padding:"28px 32px",background:"linear-gradient(135deg,#16181f,#20232e)",marginBottom:16,position:"relative",overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:22}}>
+        <div style={{width:42,height:42,borderRadius:11,background:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><I.Bus/></div>
+        <div>
+          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.18em",textTransform:"uppercase",fontWeight:500,color:"#fff",opacity:0.7,marginBottom:4}}>Main Bus · Recommended</div>
+          <div style={{fontWeight:800,fontSize:36,letterSpacing:"-0.02em",color:"#fff",lineHeight:1}}>08:00 AM</div>
         </div>
-      ))}
-    </Card>
-    <Card style={{padding:14}}><h2 style={{fontSize:13,fontWeight:600,marginBottom:4}}>Personal Vehicle / Parents</h2><p style={{fontSize:12.5,color:s.txt2,lineHeight:1.5}}>If arriving by personal vehicle, use the venue's main entrance parking lot.</p></Card>
-  </div>
-);}
-
-function PgVenue(){return(
-  <div style={{animation:"fadeUp 0.4s ease"}}>
-    <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Venue Map</h1><p style={{color:s.txt2,fontSize:13,marginBottom:20}}>Room directory & floor guide</p>
-    <Card style={{overflow:"hidden",marginBottom:14}}>
-      {["1F — Ground Floor","2F — Team Rooms","3F — Dormitory"].map((fl,fi)=>(
-        <div key={fi} style={{padding:16,borderBottom:fi<2?`1px solid ${s.borderLt}`:"none",background:fi%2===0?"#fff":s.bg}}>
-          <h3 style={{fontSize:11,fontWeight:700,color:s.accent,marginBottom:10,textTransform:"uppercase",letterSpacing:"0.05em"}}>{fl}</h3>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:6}}>
-            {VENUE.filter(r=>r.floor===`${fi+1}F`).map((r,ri)=>(
-              <div key={ri} style={{padding:"10px 12px",borderRadius:8,background:fi%2===0?s.bg:"#fff",border:`1px solid ${s.borderLt}`}}>
-                <div style={{fontSize:13,fontWeight:600,marginBottom:2}}>{r.name}</div><div style={{fontSize:11.5,color:s.txt2}}>{r.purpose}</div><div style={{fontSize:10.5,color:s.txtM,marginTop:2}}>Cap: {r.cap}</div>
-              </div>
-            ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+        {[{l:"Pickup",v:"종합운동장역",sub:"Sports Complex Station"},{l:"Capacity",v:"4 buses",sub:"Arrive 10 min early"}].map((it,i)=>(
+          <div key={i} style={{borderRadius:12,padding:"16px 18px",background:"rgba(255,255,255,0.06)"}}>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.14em",textTransform:"uppercase",color:"#fff",opacity:0.5,marginBottom:6}}>{it.l}</div>
+            <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>{it.v}</div>
+            <div style={{fontSize:12,color:"#fff",opacity:0.5,marginTop:3}}>{it.sub}</div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
+      <div style={{borderRadius:10,padding:"11px 16px",background:"rgba(108,92,231,0.18)",fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.06em",color:"#cdc6f5"}}>
+        ⚠ Please arrive by 7:45 AM. Buses depart at 8:00 AM sharp.
+      </div>
+    </div>
+
+    {/* Backup options */}
+    <Card style={{padding:"20px 24px",marginBottom:12}}>
+      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,color:s.accent,marginBottom:16}}>Backup Options — If Late</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {[{r:"광역버스 7001",t:"08:15 AM",n:"If you miss the main bus"},{r:"광역버스 7001",t:"08:45 AM",n:"Last backup option"}].map((b,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:16,padding:"14px 16px",borderRadius:12,background:"#fff",border:"1px solid #ececef"}}
+            onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
+            onMouseLeave={e=>e.currentTarget.style.transform=""}>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:700,color:s.accent,minWidth:64}}>{b.t}</div>
+            <div><div style={{fontSize:14,fontWeight:600,color:"#0d0f16"}}>{b.r}</div><div style={{fontSize:12,color:s.txt2,marginTop:2}}>{b.n}</div></div>
+          </div>
+        ))}
+      </div>
     </Card>
-    <div style={{padding:12,borderRadius:10,background:s.infoD,border:`1px solid ${s.info}18`,fontSize:12,color:"#1D4ED8"}}><strong>Note:</strong> Admin Office (1F) is staff HQ & Lost & Found.</div>
+
+    {/* Personal vehicle */}
+    <Card style={{padding:"20px 24px"}}>
+      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,color:s.accent,marginBottom:10}}>Personal Vehicle</div>
+      <div style={{fontSize:17,fontWeight:700,color:"#0d0f16",marginBottom:6}}>Self-Drive</div>
+      <p style={{fontSize:14,color:s.txt2,lineHeight:1.6}}>If arriving by personal vehicle, use the venue's main entrance parking lot.</p>
+    </Card>
   </div>
 );}
 
+function PgVenue(){
+  const floors=[{label:"1F — Ground Floor",key:"1F"},{label:"2F — Team Rooms",key:"2F"},{label:"3F — Dormitory",key:"3F"}];
+  return(
+    <div style={{animation:"fadeUp 0.4s ease"}}>
+      <PageHeader eyebrow="Room Directory">Venue Map</PageHeader>
+      <div style={{display:"flex",flexDirection:"column",gap:16}}>
+        {floors.map((fl,fi)=>(
+          <div key={fi}>
+            <MonoTag style={{display:"block",marginBottom:12,color:s.txt2}}>{fl.label}</MonoTag>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
+              {VENUE.filter(r=>r.floor===fl.key).map((r,ri)=>(
+                <div key={ri} style={{borderRadius:14,padding:"16px 18px",background:"#fafafb",border:"1px solid #ececef",transition:"transform 0.16s"}}
+                  onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
+                  onMouseLeave={e=>e.currentTarget.style.transform=""}>
+                  <div style={{fontSize:14,fontWeight:700,color:"#0d0f16",marginBottom:5}}>{r.name}</div>
+                  <div style={{fontSize:12,color:s.txt2,lineHeight:1.5}}>{r.purpose}</div>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.1em",color:s.accent,marginTop:8}}>Cap: {r.cap}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{marginTop:20,padding:"12px 16px",borderRadius:12,background:"#fafafb",border:"1px solid #ececef",fontSize:13,color:s.txt2}}>
+        Admin Office (1F) is staff HQ &amp; Lost &amp; Found.
+      </div>
+    </div>
+  );
+}
+
+function RoomHero({room,floor,label,icon}){
+  return(
+    <div style={{borderRadius:18,padding:"32px",background:"linear-gradient(135deg,#efedfb,#f6f5fe)",border:"1.5px solid #e0dbf8",textAlign:"center",marginBottom:14}}>
+      <div style={{width:56,height:56,borderRadius:14,background:"#fff",color:s.accent,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",boxShadow:"0 2px 12px rgba(108,92,231,0.15)"}}>{icon}</div>
+      <MonoTag style={{display:"block",marginBottom:10,color:s.txt2}}>{label}</MonoTag>
+      <div style={{fontWeight:800,fontSize:36,letterSpacing:"-0.02em",color:s.accent,lineHeight:1}}>{room||"TBA"}</div>
+      {floor&&<div style={{fontSize:13,color:s.txt2,marginTop:8}}>Floor: {floor}</div>}
+    </div>
+  );
+}
 function PgRooms({user,teams}){
   const myTm=user.team?teams.find(x=>x.id===user.team):null;
   const[roomSrch,setRoomSrch]=useState("");
@@ -469,19 +664,27 @@ function PgRooms({user,teams}){
     const filtSorted=roomSrch.trim()?sorted.filter(([,ppl])=>ppl.some(p=>p.name.toLowerCase().includes(srchLow))):sorted;
     return(
       <div style={{animation:"fadeUp 0.4s ease"}}>
-        <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>All Room Assignments</h1><p style={{color:s.txt2,fontSize:13,marginBottom:12}}>Dormitory rooms (admin view)</p>
-        <div style={{position:"relative",marginBottom:16}}><div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:s.txtM}}><I.Srch/></div>
-          <input value={roomSrch} onChange={e=>setRoomSrch(e.target.value)} placeholder="Search by student or mentor name…" style={{width:"100%",padding:"10px 12px 10px 36px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:10,color:s.txt,fontSize:13,fontFamily:"inherit",boxShadow:s.sh}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
-        </div>
-        <div style={{display:"grid",gap:8}}>
-          {filtSorted.map(([room,ppl])=>(
-            <Card key={room} style={{padding:14}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:14,fontWeight:700,color:s.accent,fontFamily:"'Space Mono',monospace"}}>{room}</span><Badge color={s.txt2}>{ppl.length} people</Badge></div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                {ppl.map((p,i)=>{const isMatch=roomSrch.trim()&&p.name.toLowerCase().includes(srchLow);return<span key={i} style={{padding:"3px 8px",borderRadius:5,background:isMatch?"#FEF08A":p.isMentor?`${RC[ROLES.JM]}0C`:s.bg,color:isMatch?"#1B1F30":p.isMentor?RC[ROLES.JM]:s.txt2,fontSize:11.5,fontWeight:isMatch||p.isMentor?600:400,border:`1px solid ${s.borderLt}`}}>{p.name} <span style={{fontSize:10,color:isMatch?"#5A5F78":s.txtM}}>({p.team})</span></span>;})}
+        <PageHeader eyebrow="Dormitory">Room Assignments</PageHeader>
+        <SearchInput value={roomSrch} onChange={e=>setRoomSrch(e.target.value)} placeholder="Search by student or mentor name…"/>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {filtSorted.map(([room,ppl])=>{
+            const srchLow2=roomSrch.toLowerCase();
+            return(
+              <div key={room} style={{borderRadius:18,padding:"18px 22px",background:"#fafafb",border:"1px solid #ececef"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:700,color:s.accent}}>{room}</span>
+                  <MonoTag>{ppl.length} people</MonoTag>
+                </div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                  {ppl.map((p,i)=>{const isMatch=roomSrch.trim()&&p.name.toLowerCase().includes(srchLow2);return(
+                    <span key={i} style={{padding:"5px 10px",borderRadius:8,background:isMatch?"#efedfb":p.isMentor?"rgba(108,92,231,0.06)":"#fff",color:isMatch?s.accent:p.isMentor?s.accent:s.txt2,fontSize:12,fontWeight:isMatch||p.isMentor?600:400,border:`1px solid ${isMatch?"#e0dbf8":"#ececef"}`}}>
+                      {p.name} <span style={{fontSize:10,opacity:0.6}}>({p.team})</span>
+                    </span>
+                  );})}
+                </div>
               </div>
-            </Card>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -490,14 +693,9 @@ function PgRooms({user,teams}){
     const myRoom=RM[user.name];
     return(
       <div style={{animation:"fadeUp 0.4s ease"}}>
-        <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>My Room</h1><p style={{color:s.txt2,fontSize:13,marginBottom:18}}>Your dormitory assignment</p>
-        <Card style={{padding:22,textAlign:"center"}}>
-          <div style={{width:56,height:56,borderRadius:14,background:s.accentD,color:s.accent,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}><I.Bed/></div>
-          <div style={{fontSize:12,color:s.txtM,fontWeight:700,marginBottom:3,textTransform:"uppercase",letterSpacing:"0.05em"}}>Your Dorm Room</div>
-          <div style={{fontSize:26,fontWeight:700,fontFamily:"'Space Mono',monospace",color:s.accent,marginBottom:4}}>{myRoom?.room||"TBA"}</div>
-          <div style={{fontSize:12,color:s.txt2}}>Floor: {myRoom?.floor||"—"}</div>
-        </Card>
-        {myTm&&<Card style={{padding:14,marginTop:12}}><div style={{fontSize:12,fontWeight:600,color:s.txt2,marginBottom:3}}>Team Work Room</div><div style={{fontSize:17,fontWeight:700,fontFamily:"'Space Mono',monospace"}}>{myTm.workRoom}</div><div style={{fontSize:11,color:s.txtM,marginTop:1}}>{myTm.name}</div></Card>}
+        <PageHeader eyebrow="Dormitory">My Room</PageHeader>
+        <RoomHero room={myRoom?.room} floor={myRoom?.floor} label="Your Dorm Room" icon={<I.Bed/>}/>
+        {myTm&&<Card style={{padding:"18px 22px"}}><MonoTag style={{display:"block",marginBottom:8,color:s.txt2}}>Team Work Room</MonoTag><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:700,color:"#0d0f16"}}>{myTm.workRoom}</div><div style={{fontSize:12,color:s.txt2,marginTop:4}}>{myTm.name}</div></Card>}
       </div>
     );
   }
@@ -505,35 +703,41 @@ function PgRooms({user,teams}){
     const myRoom=RM[user.name]||(myTm?RM[myTm.jm]:null);
     return(
       <div style={{animation:"fadeUp 0.4s ease"}}>
-        <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>My Room</h1><p style={{color:s.txt2,fontSize:13,marginBottom:18}}>Your dormitory assignment</p>
-        <Card style={{padding:22,textAlign:"center"}}>
-          <div style={{width:56,height:56,borderRadius:14,background:`${RC[ROLES.JM]}0C`,color:RC[ROLES.JM],display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}><I.Bed/></div>
-          <div style={{fontSize:12,color:s.txtM,fontWeight:700,marginBottom:3,textTransform:"uppercase"}}>Your Dorm Room</div>
-          <div style={{fontSize:26,fontWeight:700,fontFamily:"'Space Mono',monospace",color:RC[ROLES.JM],marginBottom:4}}>{myRoom?.room||"TBA"}</div>
-          <div style={{fontSize:12,color:s.txt2}}>Floor: {myRoom?.floor||"—"}</div>
-        </Card>
-        {myTm&&<Card style={{padding:14,marginTop:12}}><div style={{fontSize:12,fontWeight:600,color:s.txt2,marginBottom:3}}>Team Work Room</div><div style={{fontSize:17,fontWeight:700,fontFamily:"'Space Mono',monospace"}}>{myTm.workRoom}</div><div style={{fontSize:11,color:s.txtM,marginTop:1}}>{myTm.name}</div></Card>}
+        <PageHeader eyebrow="Dormitory">My Room</PageHeader>
+        <RoomHero room={myRoom?.room} floor={myRoom?.floor} label="Your Dorm Room" icon={<I.Bed/>}/>
+        {myTm&&<Card style={{padding:"18px 22px"}}><MonoTag style={{display:"block",marginBottom:8,color:s.txt2}}>Team Work Room</MonoTag><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:18,fontWeight:700,color:"#0d0f16"}}>{myTm.workRoom}</div><div style={{fontSize:12,color:s.txt2,marginTop:4}}>{myTm.name}</div></Card>}
       </div>
     );
   }
-  return <div style={{animation:"fadeUp 0.4s ease"}}><h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>My Room</h1><Card style={{padding:20,textAlign:"center"}}><p style={{color:s.txt2,fontSize:13}}>Room assignments for senior mentors will be shared separately. Please check with Admin.</p></Card></div>;
+  return(
+    <div style={{animation:"fadeUp 0.4s ease"}}>
+      <PageHeader eyebrow="Dormitory">My Room</PageHeader>
+      <Card style={{padding:"24px",textAlign:"center"}}><p style={{fontSize:14,color:s.txt2}}>Room assignments for senior mentors will be shared separately. Please check with Admin.</p></Card>
+    </div>
+  );
 }
 
 function CheckinList({team,onChk,canToggle}){
   const cnt=team.students.filter(st=>st.checkedIn).length;
   return(
-    <Card style={{padding:16}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><h3 style={{fontSize:14,fontWeight:700}}>{team.name}</h3><Badge color={cnt===8?s.ok:s.warn}>{cnt}/8</Badge></div>
-      <div style={{display:"grid",gap:4}}>
+    <div style={{borderRadius:14,padding:"16px 18px",background:"#fafafb",border:"1px solid #ececef"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div style={{fontWeight:700,fontSize:14,color:"#0d0f16"}}>{team.name}</div>
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:700,color:cnt===team.students.length?s.accent:s.txt2}}>{cnt}/{team.students.length}</div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:4}}>
         {team.students.map(st=>(
-          <button key={st.id} onClick={canToggle?()=>onChk(team.id,st.id):undefined} style={{width:"100%",display:"flex",alignItems:"center",gap:9,padding:"10px 12px",borderRadius:8,border:`1px solid ${st.checkedIn?`${s.ok}30`:s.borderLt}`,background:st.checkedIn?s.okD:"#fff",cursor:canToggle?"pointer":"default",fontFamily:"inherit",textAlign:"left",color:s.txt}}>
-            <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${st.checkedIn?s.ok:s.border}`,background:st.checkedIn?s.ok:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{st.checkedIn&&<span style={{color:"#fff",fontSize:12,fontWeight:700}}>✓</span>}</div>
-            <span style={{fontSize:13,fontWeight:st.checkedIn?600:400}}>{st.name}</span>
-            {st.checkedIn&&<span style={{marginLeft:"auto",fontSize:10,color:s.ok,fontWeight:700}}>CHECKED IN</span>}
+          <button key={st.id} onClick={canToggle?()=>onChk(team.id,st.id):undefined}
+            style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:9,border:`1px solid ${st.checkedIn?"#e0dbf8":"#ececef"}`,background:st.checkedIn?"#efedfb":"#fff",cursor:canToggle?"pointer":"default",fontFamily:"inherit",textAlign:"left",color:s.txt,transition:"border-color 0.13s"}}>
+            <div style={{width:17,height:17,borderRadius:4,border:`2px solid ${st.checkedIn?s.accent:s.border}`,background:st.checkedIn?s.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.13s"}}>
+              {st.checkedIn&&<span style={{color:"#fff",fontSize:9,fontWeight:800}}>✓</span>}
+            </div>
+            <span style={{fontSize:12,fontWeight:st.checkedIn?600:400,color:st.checkedIn?"#0d0f16":s.txt2}}>{st.name}</span>
+            {st.checkedIn&&<MonoTag style={{marginLeft:"auto"}}>In</MonoTag>}
           </button>
         ))}
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -544,39 +748,61 @@ function PgCheckin({user,teams,onChk}){
     const team=teams.find(x=>x.id===sel);const gc=teams.reduce((a,x)=>a+x.students.filter(st=>st.checkedIn).length,0);const gt=teams.reduce((a,x)=>a+x.students.length,0);
     return(
       <div style={{animation:"fadeUp 0.4s ease"}}>
-        <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Check-in Management</h1><p style={{color:s.txt2,fontSize:13,marginBottom:16}}>Mark student attendance</p>
-        <Card style={{padding:"12px 16px",display:"inline-block",marginBottom:14}}><div style={{fontSize:10,color:s.ok,fontWeight:700,marginBottom:1}}>TOTAL CHECKED IN</div><div style={{fontSize:20,fontWeight:700,color:s.ok,fontFamily:"'Space Mono',monospace"}}>{gc}/{gt}</div></Card>
-        <div style={{marginBottom:14}}><select value={sel} onChange={e=>setSel(parseInt(e.target.value))} style={{width:"100%",maxWidth:260,padding:"10px 12px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:9,color:s.txt,fontSize:13,fontFamily:"inherit",cursor:"pointer",boxShadow:s.sh}}>
-          {teams.map(tm=><option key={tm.id} value={tm.id}>{tm.name} ({tm.students.filter(st=>st.checkedIn).length}/{tm.students.length})</option>)}
-        </select></div>
+        <PageHeader eyebrow="Attendance">Check-in</PageHeader>
+        <div style={{borderRadius:18,padding:"28px 32px",background:"linear-gradient(135deg,#16181f,#20232e)",marginBottom:24,position:"relative",overflow:"hidden"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+            <div style={{borderRadius:12,padding:"20px 18px",background:"rgba(255,255,255,0.06)"}}>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.16em",textTransform:"uppercase",color:"#fff",opacity:0.5,marginBottom:10}}>Total Checked In</div>
+              <div style={{fontWeight:800,fontSize:44,lineHeight:1,letterSpacing:"-0.02em",color:"#fff"}}>{gc}/{gt}</div>
+            </div>
+            <div style={{borderRadius:12,padding:"20px 18px",background:"rgba(255,255,255,0.06)"}}>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.16em",textTransform:"uppercase",color:"#fff",opacity:0.5,marginBottom:10}}>Teams Complete</div>
+              <div style={{fontWeight:800,fontSize:44,lineHeight:1,letterSpacing:"-0.02em",color:"#fff"}}>{teams.filter(tm=>tm.students.every(st=>st.checkedIn)).length}/20</div>
+            </div>
+          </div>
+        </div>
+        <div style={{marginBottom:16}}>
+          <select value={sel} onChange={e=>setSel(parseInt(e.target.value))} style={{width:"100%",maxWidth:280,padding:"12px 14px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>
+            {teams.map(tm=><option key={tm.id} value={tm.id}>{tm.name} ({tm.students.filter(st=>st.checkedIn).length}/{tm.students.length})</option>)}
+          </select>
+        </div>
         {team&&<CheckinList team={team} onChk={onChk} canToggle/>}
       </div>
     );
   }
   if(user.role===ROLES.JM&&myTm){
-    return(<div style={{animation:"fadeUp 0.4s ease"}}><h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Team Check-in</h1><p style={{color:s.txt2,fontSize:13,marginBottom:16}}>{myTm.name} attendance</p><CheckinList team={myTm} onChk={onChk} canToggle/></div>);
+    return(
+      <div style={{animation:"fadeUp 0.4s ease"}}>
+        <PageHeader eyebrow="Attendance">Team Check-in</PageHeader>
+        <CheckinList team={myTm} onChk={onChk} canToggle/>
+      </div>
+    );
   }
   if(user.role===ROLES.STUDENT&&myTm){
     const me=myTm.students.find(st=>st.name===user.name);const cnt=myTm.students.filter(st=>st.checkedIn).length;
     return(
       <div style={{animation:"fadeUp 0.4s ease"}}>
-        <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Check-in Status</h1><p style={{color:s.txt2,fontSize:13,marginBottom:16}}>Your status & team attendance</p>
-        <Card style={{padding:18,textAlign:"center",marginBottom:14,border:me?.checkedIn?`1.5px solid ${s.ok}40`:undefined,background:me?.checkedIn?s.okD:undefined}}>
-          <div style={{fontSize:11,color:s.txtM,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>Your Status</div>
-          <div style={{fontSize:18,fontWeight:700,color:me?.checkedIn?s.ok:s.warn}}>{me?.checkedIn?"Checked In":"Not Checked In"}</div>
-        </Card>
-        <Card style={{padding:14}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}><h3 style={{fontSize:13,fontWeight:600}}>{myTm.name}</h3><Badge color={cnt===8?s.ok:s.warn}>{cnt}/8</Badge></div>
-          <div style={{display:"grid",gap:3}}>
+        <PageHeader eyebrow="Attendance">Check-in</PageHeader>
+        <div style={{borderRadius:18,padding:"28px 32px",marginBottom:16,background:me?.checkedIn?"linear-gradient(135deg,#efedfb,#f6f5fe)":"#fafafb",border:`1.5px solid ${me?.checkedIn?"#e0dbf8":"#ececef"}`,textAlign:"center",position:"relative",overflow:"hidden"}}>
+          {me?.checkedIn&&<div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:s.accent,borderRadius:"3px 0 0 3px"}}/>}
+          <MonoTag style={{display:"block",marginBottom:12,color:s.txt2}}>Your Status</MonoTag>
+          <div style={{fontWeight:800,fontSize:32,letterSpacing:"-0.02em",color:me?.checkedIn?s.accent:"#0d0f16"}}>{me?.checkedIn?"Checked In":"Not Checked In"}</div>
+        </div>
+        <div style={{borderRadius:18,padding:"20px 22px",background:"#fafafb",border:"1px solid #ececef"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+            <div style={{fontWeight:700,fontSize:15,color:"#0d0f16"}}>{myTm.name}</div>
+            <MonoTag>{cnt}/{myTm.students.length} checked in</MonoTag>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
             {myTm.students.map(st=>(
-              <div key={st.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:7,background:st.name===user.name?s.accentD:s.bg,border:`1px solid ${st.name===user.name?`${s.accent}22`:s.borderLt}`}}>
-                <div style={{width:7,height:7,borderRadius:"50%",background:st.checkedIn?s.ok:s.border}}/>
-                <span style={{fontSize:12.5,fontWeight:st.name===user.name?600:400,color:st.name===user.name?s.txt:s.txt2}}>{st.name}{st.name===user.name?" (You)":""}</span>
-                <span style={{marginLeft:"auto",fontSize:10,color:st.checkedIn?s.ok:s.txtM,fontWeight:600}}>{st.checkedIn?"In":"—"}</span>
+              <div key={st.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:10,background:st.name===user.name?"#efedfb":"#fff",border:`1px solid ${st.name===user.name?"#e0dbf8":"#ececef"}`}}>
+                <div style={{width:7,height:7,borderRadius:"50%",background:st.checkedIn?s.accent:s.border,flexShrink:0}}/>
+                <span style={{fontSize:13,fontWeight:st.name===user.name?700:400,color:st.name===user.name?"#0d0f16":s.txt2}}>{st.name}{st.name===user.name?" (You)":""}</span>
+                {st.checkedIn&&<MonoTag style={{marginLeft:"auto"}}>In</MonoTag>}
               </div>
             ))}
           </div>
-        </Card>
+        </div>
       </div>
     );
   }
@@ -590,42 +816,84 @@ function PgQna({user,items,onAns,onAsk}){
   const list=items.filter(x=>{const stOk=fil==="all"||(fil==="pending"&&!x.a)||(fil==="answered"&&!!x.a);const cOk=catFil==="all"||x.category===catFil;return stOk&&cOk;}).sort((a,b)=>b.ts-a.ts);
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
-      <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Q&A Board</h1><p style={{color:s.txt2,fontSize:13,marginBottom:12}}>Public questions & answers — visible to everyone for fairness</p>
-      {unanswered>0&&<div style={{background:s.errD,color:s.err,borderRadius:9,padding:"10px 14px",fontWeight:700,fontSize:13,marginBottom:14}}>{unanswered} question{unanswered>1?"s":""} {user.role===ROLES.ADMIN?"need your answer":"awaiting answer"}</div>}
-      <Card style={{padding:14,marginBottom:16}}>
-        <div style={{fontSize:11,fontWeight:600,color:s.txt2,marginBottom:7}}>Ask a Question</div>
-        <div style={{display:"flex",gap:6,marginBottom:6}}>
+      <PageHeader eyebrow="Questions & Answers">Q&amp;A</PageHeader>
+
+      {unanswered>0&&(
+        <div style={{borderRadius:14,padding:"12px 18px",background:"#fafafb",border:"1.5px solid #e0dbf8",marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
+          <div style={{position:"absolute"}}/>
+          <div style={{width:3,height:36,background:s.accent,borderRadius:2,flexShrink:0}}/>
+          <div style={{fontSize:13,fontWeight:600,color:"#0d0f16"}}>{unanswered} question{unanswered>1?"s":""} {canAns?"awaiting your answer":"awaiting answer"}</div>
+        </div>
+      )}
+
+      {/* Ask form */}
+      <div style={{borderRadius:18,padding:"22px 24px",background:"#fafafb",border:"1px solid #ececef",marginBottom:24}}>
+        <MonoTag style={{display:"block",marginBottom:14,color:s.txt2}}>Ask a Question</MonoTag>
+        <div style={{display:"flex",gap:8,marginBottom:8}}>
           <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Type your question…" onKeyDown={e=>e.key==="Enter"&&q.trim()&&(onAsk(q.trim(),qCat),setQ(""))}
-            style={{flex:1,padding:"10px 12px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:8,color:s.txt,fontSize:13,fontFamily:"inherit"}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
-          <select value={qCat} onChange={e=>setQCat(e.target.value)} style={{padding:"10px 10px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:8,color:s.txt,fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>
+            style={{flex:1,padding:"12px 14px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:13,fontFamily:"inherit"}}
+            onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
+          <select value={qCat} onChange={e=>setQCat(e.target.value)} style={{padding:"12px 12px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>
             {["logistics","rules","technical","general","other"].map(c=><option key={c} value={c}>{c[0].toUpperCase()+c.slice(1)}</option>)}
           </select>
-          <button onClick={()=>{if(q.trim()){onAsk(q.trim(),qCat);setQ("")}}} style={{padding:"10px 14px",borderRadius:8,border:"none",background:s.accent,color:"#fff",cursor:"pointer",fontFamily:"inherit",fontWeight:600,fontSize:12,display:"flex",alignItems:"center",gap:4}}><I.Send/>Ask</button>
+          <button onClick={()=>{if(q.trim()){onAsk(q.trim(),qCat);setQ("")}}} style={{padding:"12px 20px",borderRadius:100,border:"none",background:s.accent,color:"#fff",cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:6,transition:"all 0.14s"}}
+            onMouseEnter={e=>e.currentTarget.style.background=s.accentBright}
+            onMouseLeave={e=>e.currentTarget.style.background=s.accent}>
+            <I.Send/>Ask
+          </button>
         </div>
-        <div style={{fontSize:10,color:s.txtM,marginTop:3}}>All Q&A visible to every participant.</div>
-      </Card>
-      <div style={{display:"flex",gap:5,marginBottom:8,flexWrap:"wrap"}}>
-        {[{id:"all",l:"All"},{id:"pending",l:`Pending (${items.filter(x=>!x.a).length})`},{id:"answered",l:"Answered"}].map(f=><Pill key={f.id} active={fil===f.id} onClick={()=>setFil(f.id)} style={{padding:"6px 12px",fontSize:11.5}}>{f.l}</Pill>)}
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:s.txtM,letterSpacing:"0.1em"}}>All Q&amp;A visible to every participant</div>
       </div>
-      <div style={{display:"flex",gap:5,marginBottom:14,flexWrap:"wrap"}}>
-        {[{id:"all",l:"All Categories"},{id:"logistics",l:"Logistics"},{id:"rules",l:"Rules"},{id:"technical",l:"Technical"},{id:"general",l:"General"},{id:"other",l:"Other"}].map(f=><Pill key={f.id} active={catFil===f.id} onClick={()=>setCatFil(f.id)} color={s.info} style={{padding:"5px 10px",fontSize:11}}>{f.l}</Pill>)}
+
+      {/* Filters */}
+      <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
+        {[{id:"all",l:"All"},{id:"pending",l:`Pending (${items.filter(x=>!x.a).length})`},{id:"answered",l:"Answered"}].map(f=>(
+          <Pill key={f.id} active={fil===f.id} onClick={()=>setFil(f.id)} style={{padding:"6px 14px",fontSize:12}}>{f.l}</Pill>
+        ))}
       </div>
-      <div style={{display:"grid",gap:7}}>
+      <div style={{display:"flex",gap:6,marginBottom:20,flexWrap:"wrap"}}>
+        {["all","logistics","rules","technical","general","other"].map(c=>(
+          <Pill key={c} active={catFil===c} onClick={()=>setCatFil(c)} style={{padding:"5px 12px",fontSize:11}}>
+            {c==="all"?"All":c[0].toUpperCase()+c.slice(1)}
+          </Pill>
+        ))}
+      </div>
+
+      {/* Q&A list */}
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
         {list.map(x=>(
-          <Card key={x.id} style={{padding:14,border:!x.a?`1px solid ${s.warn}28`:undefined}}>
-            <div style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:4}}>
-              <div style={{width:24,height:24,borderRadius:6,background:s.infoD,color:s.info,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,flexShrink:0,marginTop:1}}>Q</div>
-              <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,lineHeight:1.5}}>{x.q}</div><div style={{fontSize:11,color:s.txtM,marginTop:2,display:"flex",alignItems:"center",gap:6}}><span>{x.by}{x.tm?` · Team ${x.tm}`:""} · {relTime(x.ts)}</span>{x.category&&<Badge color={s.info}>{x.category}</Badge>}</div></div>
-              {!x.a&&<Badge color={s.warn}>Pending</Badge>}
+          <div key={x.id} style={{borderRadius:18,padding:"20px 24px",background:"#fafafb",border:`1px solid ${x.a?"#ececef":"#e0dbf8"}`,position:"relative",transition:"transform 0.16s"}}
+            onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
+            onMouseLeave={e=>e.currentTarget.style.transform=""}>
+            {!x.a&&<div style={{position:"absolute",left:0,top:20,bottom:20,width:3,borderRadius:3,background:s.accent}}/>}
+            <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:x.a||canAns?12:0}}>
+              <div style={{width:28,height:28,borderRadius:8,background:"#efedfb",color:s.accent,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,flexShrink:0}}>Q</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:600,color:"#0d0f16",lineHeight:1.5}}>{x.q}</div>
+                <div style={{fontSize:11,color:s.txt2,marginTop:5,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10}}>{x.by}{x.tm?` · Team ${x.tm}`:""} · {relTime(x.ts)}</span>
+                  {x.category&&<MonoTag style={{color:s.txt2}}>{x.category}</MonoTag>}
+                </div>
+              </div>
+              {!x.a&&<MonoTag>Pending</MonoTag>}
             </div>
-            {x.a&&<div style={{marginTop:6,marginLeft:32,padding:"9px 11px",borderRadius:8,background:s.okD,border:`1px solid ${s.ok}15`}}><div style={{fontSize:10,color:s.ok,fontWeight:700,marginBottom:2}}>ANSWERED BY {x.aBy?.toUpperCase()}</div><div style={{fontSize:12.5,color:s.txt,lineHeight:1.6}}>{x.a}</div></div>}
-            {!x.a&&canAns&&(
-              <div style={{marginTop:6,marginLeft:32,display:"flex",gap:5}}>
-                <input value={ans[x.id]||""} onChange={e=>setAns(p=>({...p,[x.id]:e.target.value}))} placeholder="Answer…" style={{flex:1,padding:"8px 10px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:7,color:s.txt,fontSize:12,fontFamily:"inherit"}} onFocus={e=>e.target.style.borderColor=s.ok} onBlur={e=>e.target.style.borderColor=s.border}/>
-                <button onClick={()=>{if(ans[x.id]?.trim()){onAns(x.id,ans[x.id].trim());setAns(p=>({...p,[x.id]:""}));}}} style={{padding:"8px 12px",borderRadius:7,border:"none",background:s.ok,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Reply</button>
+            {x.a&&(
+              <div style={{marginLeft:40,padding:"12px 16px",borderRadius:12,background:"#fff",border:"1px solid #ececef",position:"relative"}}>
+                <div style={{position:"absolute",left:0,top:8,bottom:8,width:3,borderRadius:2,background:s.accent}}/>
+                <MonoTag style={{display:"block",marginBottom:6,color:s.txt2}}>Answered by {x.aBy}</MonoTag>
+                <div style={{fontSize:13,color:s.txt,lineHeight:1.6}}>{x.a}</div>
               </div>
             )}
-          </Card>
+            {!x.a&&canAns&&(
+              <div style={{marginLeft:40,display:"flex",gap:8,marginTop:4}}>
+                <input value={ans[x.id]||""} onChange={e=>setAns(p=>({...p,[x.id]:e.target.value}))} placeholder="Write your answer…"
+                  style={{flex:1,padding:"10px 14px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:10,color:s.txt,fontSize:13,fontFamily:"inherit"}}
+                  onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
+                <button onClick={()=>{if(ans[x.id]?.trim()){onAns(x.id,ans[x.id].trim());setAns(p=>({...p,[x.id]:""}));}}}
+                  style={{padding:"10px 18px",borderRadius:100,border:"none",background:s.accent,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Reply</button>
+              </div>
+            )}
+          </div>
         ))}
       </div>
     </div>
@@ -638,45 +906,64 @@ function PgAnn({user,items,onAdd,onPin,onEdit,onDel}){
   const startEdit=(a)=>{setEditMap(p=>({...p,[a.id]:true}));setEditVals(p=>({...p,[a.id]:{ti:a.title,bo:a.body}}));};
   const cancelEdit=(id)=>setEditMap(p=>({...p,[id]:false}));
   const saveEdit=(id)=>{const v=editVals[id];if(v&&v.ti.trim()&&v.bo.trim()){onEdit(id,v.ti.trim(),v.bo.trim());setEditMap(p=>({...p,[id]:false}));}};
-  const renderAnn=(a,pinned)=>{
+  const inputSt={width:"100%",padding:"12px 14px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:13,fontFamily:"inherit",marginBottom:10};
+  const renderAnn=(a)=>{
     if(isAd&&editMap[a.id]){
       const v=editVals[a.id]||{ti:a.title,bo:a.body};
       return(
-        <Card key={a.id} style={{padding:14,marginBottom:8}}>
-          <input value={v.ti} onChange={e=>setEditVals(p=>({...p,[a.id]:{...p[a.id],ti:e.target.value}}))} style={{width:"100%",padding:"8px 10px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:7,color:s.txt,fontSize:13,fontFamily:"inherit",marginBottom:6}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
-          <textarea value={v.bo} onChange={e=>setEditVals(p=>({...p,[a.id]:{...p[a.id],bo:e.target.value}}))} rows={3} style={{width:"100%",padding:"8px 10px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:7,color:s.txt,fontSize:13,fontFamily:"inherit",resize:"vertical",marginBottom:6,lineHeight:1.5,whiteSpace:"pre-wrap"}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
-          <div style={{display:"flex",gap:6}}><button onClick={()=>saveEdit(a.id)} style={{padding:"7px 14px",borderRadius:7,border:"none",background:s.ok,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Save</button><button onClick={()=>cancelEdit(a.id)} style={{padding:"7px 14px",borderRadius:7,border:`1px solid ${s.border}`,background:"#fff",color:s.txt2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button></div>
-        </Card>
+        <div key={a.id} style={{borderRadius:18,padding:"20px 24px",background:"#fafafb",border:"1px solid #ececef",marginBottom:10}}>
+          <input value={v.ti} onChange={e=>setEditVals(p=>({...p,[a.id]:{...p[a.id],ti:e.target.value}}))} style={inputSt} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
+          <textarea value={v.bo} onChange={e=>setEditVals(p=>({...p,[a.id]:{...p[a.id],bo:e.target.value}}))} rows={3} style={{...inputSt,resize:"vertical",lineHeight:1.5}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>saveEdit(a.id)} style={{padding:"9px 20px",borderRadius:100,border:"none",background:s.accent,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Save</button>
+            <button onClick={()=>cancelEdit(a.id)} style={{padding:"9px 20px",borderRadius:100,border:`1px solid ${s.border}`,background:"#fff",color:s.txt2,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
+          </div>
+        </div>
       );
     }
     return(
-      <Card key={a.id} style={{padding:pinned?16:14,marginBottom:pinned?8:6,background:pinned?`linear-gradient(135deg,${s.warn}05,${s.warn}02)`:"#fff",border:pinned?`1.5px solid ${s.warn}22`:undefined}}>
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:4}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,flex:1}}>{pinned&&<Badge color={s.warn}>Pinned</Badge>}<span style={{fontSize:pinned?14:13.5,fontWeight:pinned?700:600}}>{a.title}</span></div>
-          {isAd&&<div style={{display:"flex",gap:4,flexShrink:0}}>
-            <button onClick={()=>onPin(a.id)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${s.border}`,background:"#fff",color:a.pinned?s.warn:s.txt2,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{a.pinned?"Unpin":"Pin"}</button>
-            <button onClick={()=>startEdit(a)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${s.border}`,background:"#fff",color:s.accent,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Edit</button>
-            <button onClick={()=>window.confirm("Delete this announcement?")&&onDel(a.id)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${s.err}30`,background:s.errD,color:s.err,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Del</button>
-          </div>}
+      <div key={a.id} style={{borderRadius:18,padding:"22px 26px",background:"#fafafb",border:"1px solid #ececef",position:"relative",marginBottom:10,transition:"transform 0.16s"}}
+        onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
+        onMouseLeave={e=>e.currentTarget.style.transform=""}>
+        {a.pinned&&<div style={{position:"absolute",left:0,top:22,bottom:22,width:3,borderRadius:3,background:s.accent}}/>}
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,marginBottom:8}}>
+          <div style={{flex:1}}>
+            {a.pinned&&<MonoTag style={{display:"block",marginBottom:6}}>Pinned</MonoTag>}
+            <span style={{fontSize:16,fontWeight:700,color:"#0d0f16"}}>{a.title}</span>
+          </div>
+          {isAd&&(
+            <div style={{display:"flex",gap:5,flexShrink:0}}>
+              <button onClick={()=>onPin(a.id)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${s.border}`,background:"#fff",color:s.txt2,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{a.pinned?"Unpin":"Pin"}</button>
+              <button onClick={()=>startEdit(a)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${s.border}`,background:"#fff",color:s.accent,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Edit</button>
+              <button onClick={()=>window.confirm("Delete this announcement?")&&onDel(a.id)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${s.err}30`,background:s.errD,color:s.err,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Del</button>
+            </div>
+          )}
         </div>
-        <p style={{fontSize:13,color:s.txt2,lineHeight:1.6,marginBottom:4,whiteSpace:"pre-wrap"}}>{a.body}</p>
-        <div style={{fontSize:11,color:s.txtM}}>Posted by {a.author} · {relTime(a.ts)} · {new Date(a.ts).toLocaleDateString()}</div>
-      </Card>
+        <p style={{fontSize:14,color:s.txt2,lineHeight:1.6,marginBottom:10,whiteSpace:"pre-wrap"}}>{a.body}</p>
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:s.txtM,letterSpacing:"0.08em"}}>
+          {a.author} · {relTime(a.ts)} · {new Date(a.ts).toLocaleDateString()}
+        </div>
+      </div>
     );
   };
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
-      <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Announcements</h1><p style={{color:s.txt2,fontSize:13,marginBottom:16}}>Official updates from the organizers</p>
+      <PageHeader eyebrow="Official Updates">Announcements</PageHeader>
       {isAd&&(
-        <Card style={{padding:16,marginBottom:18}}>
-          <div style={{fontSize:11,fontWeight:600,color:s.txt2,marginBottom:8}}>Post New Announcement</div>
-          <input value={ti} onChange={e=>setTi(e.target.value)} placeholder="Title…" style={{width:"100%",padding:"10px 12px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:8,color:s.txt,fontSize:13,fontFamily:"inherit",marginBottom:7}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
-          <textarea value={bo} onChange={e=>setBo(e.target.value)} placeholder="Write your announcement…" rows={3} style={{width:"100%",padding:"10px 12px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:8,color:s.txt,fontSize:13,fontFamily:"inherit",resize:"vertical",marginBottom:7,lineHeight:1.5,whiteSpace:"pre-wrap"}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
-          <button onClick={()=>{if(ti.trim()&&bo.trim()){onAdd(ti.trim(),bo.trim());setTi("");setBo("")}}} style={{padding:"9px 20px",borderRadius:8,border:"none",background:s.accent,color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Post</button>
-        </Card>
+        <div style={{borderRadius:18,padding:"22px 24px",background:"#fafafb",border:"1px solid #ececef",marginBottom:24}}>
+          <MonoTag style={{display:"block",marginBottom:14,color:s.txt2}}>Post New Announcement</MonoTag>
+          <input value={ti} onChange={e=>setTi(e.target.value)} placeholder="Title…" style={inputSt} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
+          <textarea value={bo} onChange={e=>setBo(e.target.value)} placeholder="Write your announcement…" rows={3} style={{...inputSt,resize:"vertical",lineHeight:1.5}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
+          <button onClick={()=>{if(ti.trim()&&bo.trim()){onAdd(ti.trim(),bo.trim());setTi("");setBo("")}}}
+            style={{padding:"11px 24px",borderRadius:100,border:"none",background:s.accent,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"all 0.14s"}}
+            onMouseEnter={e=>e.currentTarget.style.background=s.accentBright}
+            onMouseLeave={e=>e.currentTarget.style.background=s.accent}>Post</button>
+        </div>
       )}
-      {items.filter(a=>a.pinned).map(a=>renderAnn(a,true))}
-      {items.filter(a=>!a.pinned).map(a=>renderAnn(a,false))}
+      <div style={{display:"flex",flexDirection:"column"}}>
+        {items.filter(a=>a.pinned).map(a=>renderAnn(a))}
+        {items.filter(a=>!a.pinned).map(a=>renderAnn(a))}
+      </div>
     </div>
   );
 }
@@ -685,29 +972,46 @@ function PgContacts({teams}){
   const[tab,setTab]=useState("jm");
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
-      <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Contacts</h1><p style={{color:s.txt2,fontSize:13,marginBottom:16}}>Mentor contact directory</p>
-      <div style={{display:"flex",gap:6,marginBottom:16}}><Pill active={tab==="jm"} onClick={()=>setTab("jm")}>Junior Mentors</Pill><Pill active={tab==="sm"} onClick={()=>setTab("sm")}>Senior Mentors</Pill></div>
-      {tab==="jm"?(
-        <div style={{display:"grid",gap:6}}>
-          {teams.map(tm=>(
-            <Card key={tm.id} hover style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:34,height:34,borderRadius:8,background:`${RC[ROLES.JM]}0C`,color:RC[ROLES.JM],display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,flexShrink:0}}>{tm.jm.slice(3,5)}</div>
-              <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{tm.jm}</div><div style={{fontSize:11.5,color:s.txt2}}>{tm.name}</div></div>
-              <div style={{textAlign:"right"}}><div style={{fontSize:12,color:s.txt2}}>{tm.jmPhone}</div><div style={{fontSize:11,color:s.txtM}}>{tm.jmEmail}</div></div>
-            </Card>
-          ))}
-        </div>
-      ):(
-        <div style={{display:"grid",gap:6}}>
-          {SM_LIST.map((sm,i)=>(
-            <Card key={i} hover style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:34,height:34,borderRadius:8,background:`${RC[ROLES.SM]}0C`,color:RC[ROLES.SM],display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,flexShrink:0}}>{sm.name.slice(3,5)}</div>
-              <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{sm.name}</div><div style={{fontSize:11.5,color:s.txt2}}>{sm.teams}</div></div>
-              <div style={{textAlign:"right"}}><div style={{fontSize:12,color:s.txt2}}>{sm.phone}</div><div style={{fontSize:11,color:s.txtM}}>{sm.email}</div></div>
-            </Card>
-          ))}
-        </div>
-      )}
+      <PageHeader eyebrow="Directory">Contacts</PageHeader>
+      <div style={{display:"flex",gap:8,marginBottom:24}}>
+        <Pill active={tab==="jm"} onClick={()=>setTab("jm")}>Junior Mentors</Pill>
+        <Pill active={tab==="sm"} onClick={()=>setTab("sm")}>Senior Mentors</Pill>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {tab==="jm"?teams.map(tm=>(
+          <div key={tm.id} style={{borderRadius:18,padding:"16px 22px",background:"#fafafb",border:"1px solid #ececef",display:"flex",alignItems:"center",gap:14,transition:"transform 0.16s"}}
+            onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
+            onMouseLeave={e=>e.currentTarget.style.transform=""}>
+            <div style={{width:40,height:40,borderRadius:12,background:"#efedfb",color:s.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,flexShrink:0}}>
+              {tm.jm.split(" ").pop()?.[0]||"M"}
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#0d0f16"}}>{tm.jm}</div>
+              <div style={{fontSize:12,color:s.txt2,marginTop:3}}>{tm.name}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:s.txt2}}>{tm.jmPhone}</div>
+              <div style={{fontSize:11,color:s.txtM,marginTop:3}}>{tm.jmEmail}</div>
+            </div>
+          </div>
+        )):SM_LIST.map((sm,i)=>(
+          <div key={i} style={{borderRadius:18,padding:"16px 22px",background:"#fafafb",border:"1px solid #ececef",display:"flex",alignItems:"center",gap:14,transition:"transform 0.16s"}}
+            onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
+            onMouseLeave={e=>e.currentTarget.style.transform=""}>
+            <div style={{width:40,height:40,borderRadius:12,background:"#efedfb",color:s.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,flexShrink:0}}>
+              {sm.name.split(" ").pop()?.[0]||"S"}
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#0d0f16"}}>{sm.name}</div>
+              <div style={{fontSize:12,color:s.txt2,marginTop:3}}>{sm.teams}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:s.txt2}}>{sm.phone}</div>
+              <div style={{fontSize:11,color:s.txtM,marginTop:3}}>{sm.email}</div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -715,14 +1019,7 @@ function PgContacts({teams}){
 function PgSubmission({user,teams,submissions,onUpdate}){
   const data=teams.map(tm=>{
     const rec=submissions.find(x=>x.teamId===tm.id);
-    return{
-      teamId:tm.id,
-      name:tm.name,
-      jm:tm.jm,
-      submitted:rec?.submitted||false,
-      by:rec?.by||null,
-      ts:rec?.ts||null,
-    };
+    return{teamId:tm.id,name:tm.name,jm:tm.jm,submitted:rec?.submitted||false,by:rec?.by||null,ts:rec?.ts||null};
   });
   const totalSubmitted=data.filter(x=>x.submitted).length;
   const canAdmin=user.role===ROLES.ADMIN;
@@ -730,63 +1027,59 @@ function PgSubmission({user,teams,submissions,onUpdate}){
   const myTeamId=user.team||null;
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
-      <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Submission Status</h1>
-      <p style={{color:s.txt2,fontSize:13,marginBottom:16}}>Track which teams have submitted their presentations.</p>
-      <Card style={{padding:"12px 16px",marginBottom:16,display:"inline-flex",flexDirection:"column",gap:2}}>
-        <div style={{fontSize:10,color:s.txtM,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}}>Overall</div>
-        <div style={{fontSize:18,fontWeight:700,color:totalSubmitted===data.length?s.ok:s.accent,fontFamily:"'Space Mono',monospace"}}>
-          {totalSubmitted}/{data.length} teams submitted
+      <PageHeader eyebrow="Competition">Submission Status</PageHeader>
+
+      {/* Progress stat */}
+      <div style={{borderRadius:18,padding:"28px 32px",background:"linear-gradient(135deg,#16181f,#20232e)",marginBottom:24,position:"relative",overflow:"hidden"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          <div style={{borderRadius:12,padding:"20px 18px",background:"rgba(255,255,255,0.06)"}}>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.16em",textTransform:"uppercase",color:"#fff",opacity:0.5,marginBottom:10}}>Submitted</div>
+            <div style={{fontWeight:800,fontSize:44,lineHeight:1,letterSpacing:"-0.02em",color:"#fff"}}>{totalSubmitted}/{data.length}</div>
+          </div>
+          <div style={{borderRadius:12,padding:"20px 18px",background:"rgba(255,255,255,0.06)"}}>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.16em",textTransform:"uppercase",color:"#fff",opacity:0.5,marginBottom:10}}>Remaining</div>
+            <div style={{fontWeight:800,fontSize:44,lineHeight:1,letterSpacing:"-0.02em",color:"#fff"}}>{data.length-totalSubmitted}</div>
+          </div>
         </div>
-      </Card>
-      <div style={{display:"grid",gap:8}}>
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {data.map(t=>{
           const isMine=t.teamId===myTeamId;
           const canToggle=canAdmin||(canStudent&&isMine);
-          const label=t.submitted?"Submitted":"Not Submitted";
-          const badgeColor=t.submitted?s.ok:s.warn;
           const btnLabel=t.submitted?"Mark as Not Submitted":"Mark as Submitted";
           const info=t.by?`Marked by ${t.by}`:null;
           const time=t.ts?new Date(t.ts).toLocaleTimeString():null;
           return(
-            <Card key={t.teamId} style={{padding:14,border:t.submitted?`1.5px solid ${s.ok}35`:undefined,background:t.submitted?s.okD:"#fff"}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                <div>
-                  <div style={{fontSize:14,fontWeight:700}}>{t.name}</div>
-                  <div style={{fontSize:11.5,color:s.txtM}}>Mentor: {t.jm}</div>
+            <div key={t.teamId} style={{borderRadius:12,padding:"12px 16px",background:"#fafafb",border:`1px solid ${isMine?"#e0dbf8":"#ececef"}`,position:"relative",transition:"transform 0.16s"}}
+              onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
+              onMouseLeave={e=>e.currentTarget.style.transform=""}>
+              {t.submitted&&<div style={{position:"absolute",left:0,top:12,bottom:12,width:3,borderRadius:3,background:s.accent}}/>}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:700,color:"#0d0f16",marginBottom:2}}>{t.name}</div>
+                  <div style={{fontSize:11,color:s.txt2}}>
+                    {info?`${info}${time?` · ${time}`:""}`:t.submitted?"Submitted":"Waiting for submission"}
+                  </div>
+                  {canStudent&&isMine&&!t.submitted&&(
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.08em",color:s.txtM,marginTop:5}}>
+                      Anyone on your team can mark the submission once uploaded
+                    </div>
+                  )}
                 </div>
-                <Badge color={badgeColor}>{label}</Badge>
+                <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+                  <MonoTag style={{color:t.submitted?s.accent:s.txt2}}>{t.submitted?"Submitted":"Pending"}</MonoTag>
+                  {canToggle&&(
+                    <button onClick={()=>onUpdate(t.teamId,!t.submitted,user.name)}
+                      style={{padding:"8px 16px",borderRadius:100,border:`1px solid ${t.submitted?"#dadade":"transparent"}`,background:t.submitted?"#fff":s.accent,color:t.submitted?s.txt:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"all 0.14s"}}
+                      onMouseEnter={e=>e.currentTarget.style.opacity=0.8}
+                      onMouseLeave={e=>e.currentTarget.style.opacity=1}>
+                      {t.submitted?"Unsubmit":"Submit"}
+                    </button>
+                  )}
+                </div>
               </div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-                <div style={{fontSize:11.5,color:s.txt2}}>
-                  {info&&<span>{info}{time?` · ${time}`:""}</span>}
-                  {!info&&<span>{t.submitted?"Submitted":"Waiting for submission"}</span>}
-                  {canStudent&&isMine&&!t.submitted&&<span style={{display:"block",marginTop:2,color:s.txtM}}>Anyone on your team can mark the submission once uploaded.</span>}
-                </div>
-                <button
-                  disabled={!canToggle}
-                  onClick={()=>canToggle&&onUpdate(t.teamId,!t.submitted,user.name)}
-                  style={{
-                    padding:"8px 12px",
-                    borderRadius:8,
-                    border:"none",
-                    background:canToggle?(t.submitted?s.warn:s.ok):(s.bg),
-                    color:canToggle?"#fff":s.txtM,
-                    fontSize:12,
-                    fontWeight:600,
-                    cursor:canToggle?"pointer":"default",
-                    fontFamily:"inherit",
-                    whiteSpace:"nowrap",
-                  }}
-                >
-                  {btnLabel}
-                </button>
-              </div>
-              {!canToggle&&(
-                <div style={{marginTop:6,fontSize:10.5,color:s.txtM}}>
-                  Submission status is read-only for your role.
-                </div>
-              )}
-            </Card>
+            </div>
           );
         })}
       </div>
@@ -814,6 +1107,14 @@ function mkStudentDetail(st,team,idx){
   };
 }
 
+function DetailField({label,value,mono}){
+  return(
+    <div>
+      <MonoTag style={{display:"block",marginBottom:6,color:s.txt2}}>{label}</MonoTag>
+      <div style={{fontSize:14,fontWeight:600,color:"#0d0f16",fontFamily:mono?"'JetBrains Mono',monospace":undefined}}>{value}</div>
+    </div>
+  );
+}
 function PgStudents({teams}){
   const[srch,setSrch]=useState("");const[sel,setSel]=useState(null);
   const allStudents=[];
@@ -823,58 +1124,50 @@ function PgStudents({teams}){
   if(sel){
     return(
       <div style={{animation:"fadeUp 0.4s ease"}}>
-        <button onClick={()=>setSel(null)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",borderRadius:8,border:`1px solid ${s.border}`,background:"#fff",color:s.txt2,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:18}}>← Back</button>
-        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:20}}>
-          <div style={{width:52,height:52,borderRadius:13,background:s.accentD,color:s.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:700,fontFamily:"'Space Mono',monospace"}}>{sel.name[0]}</div>
-          <div><div style={{fontSize:22,fontWeight:700,letterSpacing:"-0.01em"}}>{sel.name}</div><div style={{fontSize:13,color:s.txt2,marginTop:2}}>{sel.team.name} · <Badge color={RC[ROLES.STUDENT]}>Student</Badge></div></div>
-          <div style={{marginLeft:"auto"}}><Badge color={sel.checkedIn?s.ok:s.warn}>{sel.checkedIn?"Checked In":"Not Checked In"}</Badge></div>
+        <button onClick={()=>setSel(null)} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 16px",borderRadius:100,border:`1px solid ${s.border}`,background:"#fff",color:s.txt2,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:28}}>← Back</button>
+        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:32}}>
+          <div style={{width:56,height:56,borderRadius:14,background:"#efedfb",color:s.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:800}}>{sel.name[0]}</div>
+          <div>
+            <div style={{fontWeight:800,fontSize:26,letterSpacing:"-0.02em",color:"#0d0f16"}}>{sel.name}</div>
+            <div style={{fontSize:13,color:s.txt2,marginTop:4}}>{sel.team.name}</div>
+          </div>
+          <div style={{marginLeft:"auto"}}>
+            <MonoTag style={{color:sel.checkedIn?s.accent:s.txt2}}>{sel.checkedIn?"Checked In":"Not Checked In"}</MonoTag>
+          </div>
         </div>
-        <div style={{display:"grid",gap:10}}>
-          <Card style={{padding:16}}>
-            <div style={{fontSize:11,fontWeight:700,color:s.txtM,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:10}}>Contact</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Phone</div><div style={{fontSize:13,fontWeight:600}}>{sel.phone}</div></div>
-              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Email</div><div style={{fontSize:13,fontWeight:600}}>{sel.email}</div></div>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {[
+            {label:"Contact",fields:[{l:"Phone",v:sel.phone,m:true},{l:"Email",v:sel.email}]},
+            {label:"Room & Team",fields:[{l:"Dorm Room",v:sel.room,m:true},{l:"Work Room",v:sel.team.workRoom,m:true}]},
+            {label:"Logistics",fields:[{l:"Transport",v:sel.transport},{l:"Insurance",v:sel.insurance}]},
+            {label:"Emergency Contact",fields:[{l:"Name",v:sel.emergencyName},{l:"Relationship",v:sel.emergencyRel},{l:"Phone",v:sel.emergencyPhone,m:true}]},
+          ].map((sec,si)=>(
+            <div key={si} style={{borderRadius:18,padding:"20px 24px",background:"#fafafb",border:"1px solid #ececef"}}>
+              <MonoTag style={{display:"block",marginBottom:16,color:s.txt2}}>{sec.label}</MonoTag>
+              <div style={{display:"grid",gridTemplateColumns:`repeat(${sec.fields.length},1fr)`,gap:16}}>
+                {sec.fields.map((f,fi)=><DetailField key={fi} label={f.l} value={f.v} mono={f.m}/>)}
+              </div>
             </div>
-          </Card>
-          <Card style={{padding:16}}>
-            <div style={{fontSize:11,fontWeight:700,color:s.txtM,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:10}}>Room & Team</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Dorm Room</div><div style={{fontSize:13,fontWeight:600,fontFamily:"'Space Mono',monospace",color:s.accent}}>{sel.room}</div><div style={{fontSize:11,color:s.txt2}}>{sel.floor}</div></div>
-              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Work Room</div><div style={{fontSize:13,fontWeight:600}}>{sel.team.workRoom}</div><div style={{fontSize:11,color:s.txt2}}>{sel.team.name}</div></div>
-            </div>
-          </Card>
-          <Card style={{padding:16}}>
-            <div style={{fontSize:11,fontWeight:700,color:s.txtM,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:10}}>Logistics</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Transport</div><div style={{fontSize:13,fontWeight:600}}>{sel.transport}</div></div>
-              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Insurance</div><div style={{fontSize:13,fontWeight:600}}>{sel.insurance}</div></div>
-            </div>
-          </Card>
-          <Card style={{padding:16}}>
-            <div style={{fontSize:11,fontWeight:700,color:s.txtM,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:10}}>Emergency Contact</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Name</div><div style={{fontSize:13,fontWeight:600}}>{sel.emergencyName}</div></div>
-              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Relationship</div><div style={{fontSize:13,fontWeight:600}}>{sel.emergencyRel}</div></div>
-              <div><div style={{fontSize:10,color:s.txtM,fontWeight:700,marginBottom:2}}>Phone</div><div style={{fontSize:13,fontWeight:600}}>{sel.emergencyPhone}</div></div>
-            </div>
-          </Card>
+          ))}
         </div>
       </div>
     );
   }
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
-      <h1 style={{fontSize:24,fontWeight:700,marginBottom:3}}>Students</h1><p style={{color:s.txt2,fontSize:13,marginBottom:16}}>All {allStudents.length} participants (admin view)</p>
-      <div style={{position:"relative",marginBottom:16}}><div style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:s.txtM}}><I.Srch/></div>
-        <input value={srch} onChange={e=>setSrch(e.target.value)} placeholder="Search by student name…" style={{width:"100%",padding:"10px 12px 10px 36px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:10,color:s.txt,fontSize:13,fontFamily:"inherit",boxShadow:s.sh}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
-      </div>
-      <div style={{display:"grid",gap:4}}>
+      <PageHeader eyebrow="Admin View">Students</PageHeader>
+      <SearchInput value={srch} onChange={e=>setSrch(e.target.value)} placeholder="Search by student name…"/>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {filtered.map((st,i)=>(
-          <button key={st.id} onClick={()=>setSel(st)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:9,border:`1px solid ${s.border}`,background:"#fff",cursor:"pointer",fontFamily:"inherit",textAlign:"left",color:s.txt,boxShadow:s.sh}} onMouseEnter={e=>e.currentTarget.style.boxShadow=s.shL} onMouseLeave={e=>e.currentTarget.style.boxShadow=s.sh}>
-            <div style={{width:32,height:32,borderRadius:8,background:s.accentD,color:s.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,flexShrink:0}}>{st.name[0]}</div>
-            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{st.name}</div><div style={{fontSize:11.5,color:s.txt2}}>{st.team.name}</div></div>
-            <Badge color={st.checkedIn?s.ok:s.warn}>{st.checkedIn?"In":"—"}</Badge>
+          <button key={st.id} onClick={()=>setSel(st)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 20px",borderRadius:14,border:"1px solid #ececef",background:"#fafafb",cursor:"pointer",fontFamily:"inherit",textAlign:"left",color:s.txt,transition:"transform 0.16s"}}
+            onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
+            onMouseLeave={e=>e.currentTarget.style.transform=""}>
+            <div style={{width:36,height:36,borderRadius:10,background:"#efedfb",color:s.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,flexShrink:0}}>{st.name[0]}</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:14,fontWeight:600,color:"#0d0f16"}}>{st.name}</div>
+              <div style={{fontSize:12,color:s.txt2,marginTop:2}}>{st.team.name}</div>
+            </div>
+            {st.checkedIn&&<MonoTag>In</MonoTag>}
             <span style={{color:s.txtM}}><I.Rt/></span>
           </button>
         ))}
