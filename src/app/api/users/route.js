@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
-import { requireAdmin, hashPassword, generatePassword } from "@/lib/auth";
+import {
+  requireAdmin,
+  hashPassword,
+  generatePassword,
+  canonicalUsername,
+  ROLES,
+} from "@/lib/auth";
 import { sendCredentialsEmail } from "@/lib/email";
 
 export async function GET() {
@@ -29,21 +35,44 @@ export async function POST(req) {
   if (!name || !username || !role) {
     return NextResponse.json({ error: "name, username, and role required" }, { status: 400 });
   }
+  if (!ROLES.includes(role)) {
+    return NextResponse.json({ error: "invalid role" }, { status: 400 });
+  }
+  const normalizedUsername = canonicalUsername(username);
+  if (!normalizedUsername) {
+    return NextResponse.json({ error: "username cannot be blank" }, { status: 400 });
+  }
+
+  const parsedTeamId =
+    teamId != null && teamId !== "" ? parseInt(teamId) : null;
+  if (parsedTeamId != null && !Number.isInteger(parsedTeamId)) {
+    return NextResponse.json({ error: "invalid teamId" }, { status: 400 });
+  }
+
+  const db = await getDb();
+
+  // If a teamId was given, verify the team actually exists before inserting
+  // the user. Avoids creating orphan user accounts that point at nothing.
+  if (parsedTeamId != null) {
+    const teamExists = await db.collection("teams").countDocuments({ _id: parsedTeamId });
+    if (!teamExists) {
+      return NextResponse.json({ error: "team not found" }, { status: 400 });
+    }
+  }
 
   const tempPassword = generatePassword();
   const passwordHash = await hashPassword(tempPassword);
 
   const doc = {
     name,
-    username: username.trim(),
+    username: normalizedUsername,
     email: email || null,
     role,
-    teamId: teamId != null && teamId !== "" ? parseInt(teamId) : null,
+    teamId: parsedTeamId,
     passwordHash,
     mustChangePassword: true,
   };
 
-  const db = await getDb();
   let inserted;
   try {
     inserted = await db.collection("users").insertOne(doc);

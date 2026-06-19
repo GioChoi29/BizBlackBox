@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
-import { verifyPassword, createSession, publicUser } from "@/lib/auth";
+import {
+  verifyPassword,
+  createSession,
+  publicUser,
+  canonicalUsername,
+} from "@/lib/auth";
 
 export async function POST(req) {
   const { username, password } = await req.json();
@@ -9,7 +14,7 @@ export async function POST(req) {
   }
 
   const db = await getDb();
-  const user = await db.collection("users").findOne({ username: username.trim() });
+  const user = await db.collection("users").findOne({ username: canonicalUsername(username) });
   if (!user) {
     return NextResponse.json({ error: "Invalid username or password" }, { status: 401 });
   }

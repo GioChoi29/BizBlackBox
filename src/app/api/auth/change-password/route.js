@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
-import { requireUser, verifyPassword, hashPassword } from "@/lib/auth";
+import {
+  requireUser,
+  verifyPassword,
+  hashPassword,
+  deleteSessionsForUser,
+  createSession,
+} from "@/lib/auth";
 
 export async function POST(req) {
   const { error, user } = await requireUser();
@@ -25,5 +31,12 @@ export async function POST(req) {
     { _id: user._id },
     { $set: { passwordHash: newHash, mustChangePassword: false } }
   );
+
+  // Invalidate every other session for this user (in case of hijack), then
+  // issue a fresh one for the current browser. createSession overwrites the
+  // existing cookie with the new token.
+  await deleteSessionsForUser(user._id);
+  await createSession(user._id);
+
   return NextResponse.json({ ok: true });
 }

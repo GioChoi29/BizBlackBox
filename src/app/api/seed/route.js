@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
-import { hashPassword, getCurrentUser } from "@/lib/auth";
+import { hashPassword, requireAdmin } from "@/lib/auth";
 import {
   buildTeams,
   buildSubmissions,
@@ -16,21 +16,26 @@ import {
   SEED_PASSWORD,
 } from "@/lib/seedData";
 
+// HTTP seed endpoint — re-seeds an existing DB. Requires:
+//   1. Admin session, AND
+//   2. ALLOW_SEED=1 env var (defense in depth so a leaked admin token can't
+//      single-handedly wipe production)
+// Use `npm run seed` from the CLI for first-time bootstrap on an empty DB.
 export async function POST() {
-  const db = await getDb();
+  const { error } = await requireAdmin();
+  if (error) return error;
 
-  // Allow seeding only when the DB is empty (first-run bootstrap) or by an admin.
-  const userCount = await db.collection("users").countDocuments();
-  if (userCount > 0) {
-    const me = await getCurrentUser();
-    if (!me || me.role !== "admin") {
-      return NextResponse.json(
-        { error: "forbidden — only admins can re-seed once data exists" },
-        { status: 403 }
-      );
-    }
+  if (process.env.ALLOW_SEED !== "1") {
+    return NextResponse.json(
+      {
+        error:
+          "seeding is disabled. Set ALLOW_SEED=1 in env to permit; intended for one-shot resets only.",
+      },
+      { status: 403 }
+    );
   }
 
+  const db = await getDb();
   const collections = [
     "teams", "submissions", "users", "qna", "announcements",
     "schedule", "mentors_sm", "venue", "prelim", "room_map",
@@ -61,12 +66,13 @@ export async function POST() {
   await db.collection("schedule").createIndex({ day: 1, order: 1 });
   await db.collection("room_map").createIndex({ person: 1 });
   await db.collection("sessions").createIndex({ token: 1 }, { unique: true });
+  await db.collection("sessions").createIndex({ userId: 1 });
   await db.collection("sessions").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
   return NextResponse.json({
     ok: true,
     message: "Seeded all collections",
     seedPassword: SEED_PASSWORD,
-    note: "All seeded users have this initial password (except admin) and must change it on first login. Admin password is also this value but no forced change.",
+    note: "Admin (no forced change) and all other accounts (forced change) start with this password.",
   });
 }

@@ -100,12 +100,13 @@ const PageHeader=({eyebrow,children,mb=40})=>(
 const MonoTag=({children,style:st})=>(
   <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,color:s.accent,...st}}>{children}</span>
 );
-const SearchInput=({value,onChange,placeholder})=>(
+const SearchInput=({value,onChange,placeholder,ariaLabel})=>(
   <div style={{display:"flex",alignItems:"center",gap:12,background:"#fafafb",border:`1px solid ${s.border}`,borderRadius:12,padding:"16px 20px",marginBottom:26,transition:"border-color 0.14s,box-shadow 0.14s"}}
     onFocusCapture={e=>{ e.currentTarget.style.borderColor=s.accent; e.currentTarget.style.boxShadow="0 0 0 3px rgba(108,92,231,0.12)"; }}
     onBlurCapture={e=>{ e.currentTarget.style.borderColor=s.border; e.currentTarget.style.boxShadow="none"; }}>
-    <I.Srch style={{color:s.txtM,flexShrink:0}}/>
+    <I.Srch aria-hidden="true" style={{color:s.txtM,flexShrink:0}}/>
     <input value={value} onChange={onChange} placeholder={placeholder}
+      aria-label={ariaLabel||placeholder||"Search"} type="search"
       style={{border:"none",outline:"none",background:"transparent",fontFamily:"'Archivo',sans-serif",fontSize:15,color:s.txt,width:"100%"}}/>
   </div>
 );
@@ -125,6 +126,48 @@ function relTime(ts){
   if(d<86400000)return`${Math.floor(d/3600000)}h ago`;
   return`${Math.floor(d/86400000)}d ago`;
 }
+
+// Trigger a re-render every `ms` so static timestamps in the tree (relTime
+// calls, etc.) recompute without each consumer setting up its own interval.
+function useTick(ms=60000){
+  const[,setT]=useState(0);
+  useEffect(()=>{const id=setInterval(()=>setT(t=>t+1),ms);return()=>clearInterval(id);},[ms]);
+}
+
+// Lightweight toast stack — top-right, auto-dismiss after 3.5s.
+function useToasts(){
+  const[toasts,setToasts]=useState([]);
+  const push=(type,msg)=>{
+    const id=Math.random().toString(36).slice(2);
+    setToasts(p=>[...p,{id,type,msg}]);
+    setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3500);
+  };
+  return{toasts,success:m=>push("success",m),error:m=>push("error",m),info:m=>push("info",m)};
+}
+function ToastStack({toasts}){
+  const c={success:{bg:s.okD,fg:s.ok},error:{bg:s.errD,fg:s.err},info:{bg:s.accentD,fg:s.accent}};
+  return(
+    <div role="status" aria-live="polite" style={{position:"fixed",top:18,right:18,zIndex:9999,display:"flex",flexDirection:"column",gap:8,maxWidth:340,pointerEvents:"none"}}>
+      {toasts.map(t=>{const k=c[t.type]||c.info;return(
+        <div key={t.id} style={{padding:"11px 16px",borderRadius:11,background:"#fff",color:k.fg,fontSize:13,fontWeight:600,border:`1px solid ${k.fg}33`,boxShadow:"0 6px 24px rgba(20,22,29,0.12)",animation:"toastIn 0.2s ease",pointerEvents:"auto"}}>{t.msg}</div>
+      );})}
+    </div>
+  );
+}
+
+function EmptyState({icon,title,msg}){
+  return(
+    <div style={{padding:"56px 24px",textAlign:"center",border:`1px dashed ${s.border}`,borderRadius:18,background:"#fcfcfd"}}>
+      {icon&&<div style={{width:48,height:48,borderRadius:12,background:"#fafafb",color:s.txtM,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:14}}>{icon}</div>}
+      {title&&<div style={{fontWeight:700,fontSize:15,color:s.txt,marginBottom:6}}>{title}</div>}
+      {msg&&<div style={{fontSize:13,color:s.txt2,lineHeight:1.5,maxWidth:320,margin:"0 auto"}}>{msg}</div>}
+    </div>
+  );
+}
+
+// Visually-hidden but readable by screen readers (for input labels, icon button
+// captions, etc.). Apply via `style={srOnly}`.
+const srOnly={position:"absolute",width:1,height:1,padding:0,margin:-1,overflow:"hidden",clip:"rect(0,0,0,0)",whiteSpace:"nowrap",border:0};
 
 function CountdownWidget(){
   const left=useCountdown(DL);
@@ -160,55 +203,6 @@ function CountdownWidget(){
   );
 }
 
-function LoginScreen({onLogin}){
-  const[name,setName]=useState("");const[role,setRole]=useState(null);const[team,setTeam]=useState("");const[err,setErr]=useState("");
-  const go=()=>{
-    if(!name.trim())return setErr("Please enter your name");if(!role)return setErr("Please select your role");
-    if((role===ROLES.STUDENT||role===ROLES.JM)&&!team)return setErr("Please select your team");
-    onLogin({name:name.trim(),role,team:team?parseInt(team):null});
-  };
-  return(
-    <div style={{minHeight:"100vh",background:"linear-gradient(155deg,#EEF0F8 0%,#F8F6FF 45%,#F0F4FF 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"Arial,sans-serif"}}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Space+Mono:wght@400;700&display=swap');*{box-sizing:border-box;margin:0;padding:0}body{background:#F4F5FA;margin:0}input:focus,textarea:focus,select:focus{outline:none}::placeholder{color:#9298B2}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#D0D3E0;border-radius:3px}@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}@keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}`}</style>
-      <div style={{width:"100%",maxWidth:400,animation:"fadeUp 0.5s ease"}}>
-        <div style={{textAlign:"center",marginBottom:34}}>
-          <div style={{display:"inline-flex",alignItems:"center",gap:10,marginBottom:6}}>
-            <div style={{width:44,height:44,borderRadius:13,background:"linear-gradient(135deg,#4F6BF6,#7C5CDB)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:700,color:"#fff",fontFamily:"'Space Mono',monospace",boxShadow:"0 4px 20px rgba(79,107,246,0.3)"}}>B</div>
-            <span style={{fontSize:30,fontWeight:700,color:s.txt,letterSpacing:"-0.02em"}}>BBB 2026</span>
-          </div>
-          <p style={{color:s.txtM,fontSize:13,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:500}}>Business Case Competition</p>
-        </div>
-        <div style={{background:"#fff",border:`1px solid ${s.border}`,borderRadius:20,padding:28,boxShadow:s.shL}}>
-          <div style={{marginBottom:20}}>
-            <label style={{display:"block",fontSize:11,fontWeight:700,color:s.txtM,marginBottom:7,textTransform:"uppercase",letterSpacing:"0.06em"}}>Your Name</label>
-            <input value={name} onChange={e=>{setName(e.target.value);setErr("")}} placeholder="Enter your full name" onKeyDown={e=>e.key==="Enter"&&go()}
-              style={{width:"100%",padding:"12px 14px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:10,color:s.txt,fontSize:14,fontFamily:"inherit"}}
-              onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
-          </div>
-          <div style={{marginBottom:20}}>
-            <label style={{display:"block",fontSize:11,fontWeight:700,color:s.txtM,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.06em"}}>Your Role</label>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-              {Object.entries(ROLES).map(([k,v])=>(
-                <button key={k} onClick={()=>{setRole(v);setErr("")}} style={{padding:"10px 8px",borderRadius:10,border:`1.5px solid ${role===v?RC[v]:s.border}`,background:role===v?`${RC[v]}0C`:"#fff",color:role===v?RC[v]:s.txt2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{RL[v]}</button>
-              ))}
-            </div>
-          </div>
-          {(role===ROLES.STUDENT||role===ROLES.JM)&&(
-            <div style={{marginBottom:20,animation:"fadeUp 0.25s ease"}}>
-              <label style={{display:"block",fontSize:11,fontWeight:700,color:s.txtM,marginBottom:7,textTransform:"uppercase",letterSpacing:"0.06em"}}>Your Team</label>
-              <select value={team} onChange={e=>{setTeam(e.target.value);setErr("")}} style={{width:"100%",padding:"12px 14px",background:s.bg,border:`1px solid ${s.border}`,borderRadius:10,color:team?s.txt:s.txtM,fontSize:14,fontFamily:"inherit",cursor:"pointer",appearance:"none"}}>
-                <option value="">Select your team…</option>
-                {TN.map((n,i)=><option key={i} value={i+1}>Team {n}</option>)}
-              </select>
-            </div>
-          )}
-          {err&&<div style={{padding:"8px 12px",borderRadius:8,background:s.errD,color:s.err,fontSize:12,marginBottom:14,fontWeight:500}}>{err}</div>}
-          <button onClick={go} style={{width:"100%",padding:"12px 20px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#4F6BF6,#6B82F8)",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 16px rgba(79,107,246,0.25)"}}>Enter Portal</button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function BBBPortal(){
   const[user,setUser]=useState(null);
@@ -226,10 +220,22 @@ export default function BBBPortal(){
   const[transport,setTransport]=useState(null);
   const[users,setUsers]=useState([]);
   const[moreOpen,setMoreOpen]=useState(false);
+  const toast=useToasts();
+  useTick(60000); // refresh relTime strings every minute
 
-  // Defensive: if API returns non-2xx (e.g. 401/403/500), coerce to empty array
-  // so downstream `.filter()` / `.map()` never crash the UI.
-  const safeArr=(setter)=>(r)=>r.ok?r.json().then(d=>setter(Array.isArray(d)?d:[])):setter([]);
+  // Session-expired bounce: clear stale cookie then redirect to /login.
+  const bounceToLogin=async()=>{
+    try{await fetch("/api/auth/logout",{method:"POST"});}catch{}
+    window.location.href="/login";
+  };
+  // Defensive reader: any 401 from a data fetch means the session lapsed —
+  // redirect to /login. Other non-2xx (403/500) → empty array so the UI keeps
+  // rendering instead of crashing on .filter()/.map().
+  const safeArr=(setter)=>(r)=>{
+    if(r.status===401){bounceToLogin();return;}
+    if(!r.ok){setter([]);return;}
+    return r.json().then(d=>setter(Array.isArray(d)?d:[]));
+  };
   const reloadTeams=()=>fetch("/api/teams").then(safeArr(setTeams)).catch(()=>setTeams([]));
   const reloadSubs=()=>fetch("/api/submissions").then(safeArr(setSubmissions)).catch(()=>setSubmissions([]));
   const reloadQna=()=>fetch("/api/qna").then(safeArr(setQna)).catch(()=>setQna([]));
@@ -239,16 +245,15 @@ export default function BBBPortal(){
   const reloadVenue=()=>fetch("/api/venue").then(safeArr(setVenueList)).catch(()=>setVenueList([]));
   const reloadPrelim=()=>fetch("/api/prelim").then(safeArr(setPrelimList)).catch(()=>setPrelimList([]));
   const reloadRoomMap=()=>fetch("/api/room-map").then(safeArr(setRoomMap)).catch(()=>setRoomMap([]));
-  const reloadTransport=()=>fetch("/api/transport").then(r=>r.ok?r.json().then(setTransport):setTransport(null)).catch(()=>setTransport(null));
+  const reloadTransport=()=>fetch("/api/transport").then(r=>{
+    if(r.status===401){bounceToLogin();return;}
+    if(!r.ok){setTransport(null);return;}
+    return r.json().then(setTransport);
+  }).catch(()=>setTransport(null));
   const reloadUsers=()=>fetch("/api/users").then(safeArr(setUsers)).catch(()=>setUsers([]));
 
   useEffect(()=>{
     let cancelled=false;
-    const bounceToLogin=async()=>{
-      // Clear any stale session cookie so the proxy doesn't bounce /login back to /
-      try{await fetch("/api/auth/logout",{method:"POST"});}catch{}
-      window.location.href="/login";
-    };
     fetch("/api/auth/me").then(async r=>{
       if(cancelled)return;
       if(!r.ok){bounceToLogin();return;}
@@ -271,6 +276,20 @@ export default function BBBPortal(){
     window.location.href="/login";
   };
 
+  // Scroll to top whenever the user switches pages.
+  useEffect(()=>{if(typeof window!=="undefined")window.scrollTo({top:0,behavior:"instant"});},[tab]);
+
+  // Close the mobile "More" menu on Escape or outside click.
+  const moreRef=useRef(null);
+  useEffect(()=>{
+    if(!moreOpen)return;
+    const onKey=(e)=>{if(e.key==="Escape")setMoreOpen(false);};
+    const onClick=(e)=>{if(moreRef.current&&!moreRef.current.contains(e.target))setMoreOpen(false);};
+    document.addEventListener("keydown",onKey);
+    document.addEventListener("mousedown",onClick);
+    return()=>{document.removeEventListener("keydown",onKey);document.removeEventListener("mousedown",onClick);};
+  },[moreOpen]);
+
   if(authLoading||!user)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Archivo',sans-serif",color:"#5c6273"}}>Loading…</div>;
 
   const chk=(tid,sid)=>{
@@ -278,15 +297,46 @@ export default function BBBPortal(){
     const st=tm.students.find(x=>x.id===sid);if(!st)return;
     const next=!st.checkedIn;
     setTeams(p=>p.map(t=>t.id===tid?{...t,students:t.students.map(s=>s.id===sid?{...s,checkedIn:next}:s)}:t));
-    fetch(`/api/teams/${tid}/checkin`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({studentId:sid,checkedIn:next})}).catch(()=>reloadTeams());
+    fetch(`/api/teams/${tid}/checkin`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({studentId:sid,checkedIn:next})}).then(r=>{
+      if(r.status===401)return bounceToLogin();
+      if(!r.ok)reloadTeams(); // server rejected — roll back to truth
+    }).catch(()=>reloadTeams());
   };
-  const setSubmissionStatus=(teamId,submitted,byName)=>{
-    setSubmissions(p=>p.map(x=>x.teamId===teamId?{...x,submitted,by:byName,ts:Date.now()}:x));
-    fetch("/api/submissions",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({teamId,submitted,by:byName})}).catch(()=>reloadSubs());
+  // Identity fields (by/author/aBy) are now derived from the session server-side
+  // — don't send them from the client. We pass the local user.name into the
+  // optimistic-update so the UI shows the right name before the refetch.
+  const setSubmissionStatus=(teamId,submitted)=>{
+    setSubmissions(p=>p.map(x=>x.teamId===teamId?{...x,submitted,by:user.name,ts:Date.now()}:x));
+    fetch("/api/submissions",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({teamId,submitted})}).then(r=>{
+      if(r.status===401)return bounceToLogin();
+      if(!r.ok)reloadSubs(); // server rejected — roll back
+    }).catch(()=>reloadSubs());
   };
-  const askQna=(q,cat)=>fetch("/api/qna",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({q,by:user.name,tm:user.team,category:cat||"general"})}).then(reloadQna);
-  const answerQna=(id,a)=>fetch(`/api/qna/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({a,aBy:user.name})}).then(reloadQna);
-  const addAnn=(title,body)=>fetch("/api/announcements",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title,body,author:user.name})}).then(reloadAnn);
+  // mutation wrapper — checks res.ok, fires the matching toast.
+  const mutate=async(p,okMsg,errMsg)=>{
+    try{
+      const r=await p;
+      if(r&&r.status===401){bounceToLogin();return false;}
+      if(r&&!r.ok){toast.error(errMsg||"Something went wrong");return false;}
+      if(okMsg)toast.success(okMsg);
+      return true;
+    }catch{
+      toast.error(errMsg||"Network error");
+      return false;
+    }
+  };
+  const askQna=(q,cat)=>mutate(
+    fetch("/api/qna",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({q,category:cat||"general"})}),
+    "Question posted","Couldn't post question"
+  ).then(ok=>ok&&reloadQna());
+  const answerQna=(id,a)=>mutate(
+    fetch(`/api/qna/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({a})}),
+    "Reply saved","Couldn't save reply"
+  ).then(ok=>ok&&reloadQna());
+  const addAnn=(title,body)=>mutate(
+    fetch("/api/announcements",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title,body})}),
+    "Announcement posted","Couldn't post announcement"
+  ).then(ok=>ok&&reloadAnn());
   const pinAnn=(id)=>fetch(`/api/announcements/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({togglePin:true})}).then(reloadAnn);
   const editAnn=(id,title,body)=>fetch(`/api/announcements/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({title,body})}).then(reloadAnn);
   const delAnn=(id)=>fetch(`/api/announcements/${id}`,{method:"DELETE"}).then(reloadAnn);
@@ -341,7 +391,7 @@ export default function BBBPortal(){
         </div>
         {/* User chip */}
         <div style={{display:"flex",alignItems:"center",gap:12,padding:13,borderRadius:12,marginBottom:24,background:"#f1f1f4"}}>
-          <div style={{width:38,height:38,borderRadius:10,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:15,background:"linear-gradient(135deg,#6c5ce7,#8472f2)",color:"#fff"}}>{user.name[0]}</div>
+          <div style={{width:38,height:38,borderRadius:10,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:15,background:"linear-gradient(135deg,#6c5ce7,#8472f2)",color:"#fff"}}>{user.name?.[0]??"?"}</div>
           <div><div style={{fontWeight:700,fontSize:14,color:"#14161d"}}>{user.name}</div><div style={{fontSize:10,letterSpacing:"0.13em",textTransform:"uppercase",color:s.accent,fontWeight:700,marginTop:2}}>{RL[user.role]}</div></div>
         </div>
         {/* Nav */}
@@ -356,7 +406,7 @@ export default function BBBPortal(){
           );})}
         </nav>
         {/* Logout */}
-        <button onClick={logout} style={{display:"flex",alignItems:"center",gap:13,padding:14,border:"none",background:"transparent",color:s.txt2,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",opacity:0.7}}
+        <button onClick={logout} aria-label="Log out" style={{display:"flex",alignItems:"center",gap:13,padding:14,border:"none",background:"transparent",color:s.txt2,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",opacity:0.7}}
           onMouseEnter={e=>{e.currentTarget.style.opacity=1;e.currentTarget.style.color=s.err;}}
           onMouseLeave={e=>{e.currentTarget.style.opacity=0.7;e.currentTarget.style.color=s.txt2;}}>
           <I.Out/>Log Out
@@ -370,15 +420,19 @@ export default function BBBPortal(){
         <div style={{position:"absolute",width:440,height:440,top:-190,right:-90,borderRadius:"50%",filter:"blur(100px)",background:"rgba(108,92,231,0.08)",zIndex:0,pointerEvents:"none"}}/>
         <div style={{position:"relative",zIndex:2,maxWidth:900,margin:"0 auto",padding:"50px 60px 100px"}}>{pages[tab]}</div>
       </div>
-      <div className="mbn" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:`1px solid ${s.border}`,display:"none",justifyContent:"space-around",padding:"6px 2px",zIndex:100}}>
-        {nav.slice(0,5).map(n=>{const a=tab===n.id;const Ic=n.icon;return <button key={n.id} onClick={()=>setTab(n.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:"4px 5px",border:"none",borderRadius:6,background:a?s.accentD:"transparent",color:a?s.accent:s.txtM,fontSize:9,fontWeight:500,cursor:"pointer",fontFamily:"inherit",minWidth:48}}><Ic/>{n.label}</button>;})}
-        <div style={{position:"relative"}}>
-          <button onClick={()=>setMoreOpen(!moreOpen)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:"4px 5px",border:"none",borderRadius:6,background:"transparent",color:s.txtM,fontSize:9,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}><span style={{fontSize:16,lineHeight:1}}>···</span>More</button>
-          {moreOpen&&<div style={{position:"absolute",bottom:"100%",right:0,marginBottom:6,background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,padding:5,minWidth:150,boxShadow:s.shL}}>
-            {nav.slice(5).map(n=>{const Ic=n.icon;return <button key={n.id} onClick={()=>{setTab(n.id);setMoreOpen(false)}} style={{width:"100%",display:"flex",alignItems:"center",gap:7,padding:"8px 10px",borderRadius:7,border:"none",background:tab===n.id?s.accentD:"transparent",color:tab===n.id?s.accent:s.txt2,fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}><Ic/>{n.label}</button>;})}
-          </div>}
+      <nav className="mbn" aria-label="Mobile navigation" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:`1px solid ${s.border}`,display:"none",justifyContent:"space-around",padding:"6px 2px",zIndex:100}}>
+        {nav.slice(0,5).map(n=>{const a=tab===n.id;const Ic=n.icon;return <button key={n.id} onClick={()=>setTab(n.id)} aria-label={n.label} aria-current={a?"page":undefined} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:"4px 5px",border:"none",borderRadius:6,background:a?s.accentD:"transparent",color:a?s.accent:s.txtM,fontSize:9,fontWeight:500,cursor:"pointer",fontFamily:"inherit",minWidth:48}}><Ic/>{n.label}</button>;})}
+        <div ref={moreRef} style={{position:"relative"}}>
+          <button onClick={()=>setMoreOpen(!moreOpen)} aria-label="More navigation options" aria-expanded={moreOpen} aria-haspopup="menu" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,padding:"4px 5px",border:"none",borderRadius:6,background:"transparent",color:s.txtM,fontSize:9,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}><span aria-hidden="true" style={{fontSize:16,lineHeight:1}}>···</span>More</button>
+          {moreOpen&&<>
+            <div onClick={()=>setMoreOpen(false)} aria-hidden="true" style={{position:"fixed",inset:0,zIndex:99}}/>
+            <div role="menu" style={{position:"absolute",bottom:"100%",right:0,marginBottom:6,background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,padding:5,minWidth:150,boxShadow:s.shL,zIndex:100}}>
+              {nav.slice(5).map(n=>{const Ic=n.icon;return <button key={n.id} role="menuitem" onClick={()=>{setTab(n.id);setMoreOpen(false)}} aria-current={tab===n.id?"page":undefined} style={{width:"100%",display:"flex",alignItems:"center",gap:7,padding:"8px 10px",borderRadius:7,border:"none",background:tab===n.id?s.accentD:"transparent",color:tab===n.id?s.accent:s.txt2,fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}><Ic/>{n.label}</button>;})}
+            </div>
+          </>}
         </div>
-      </div>
+      </nav>
+      <ToastStack toasts={toast.toasts}/>
     </div>
   );
 }
@@ -391,7 +445,7 @@ function PgHome({user,teams,ann,setTab}){
   const chkd=teams.reduce((a,x)=>a+x.students.filter(st=>st.checkedIn).length,0);
   const isAd=user.role===ROLES.ADMIN;
   const statCards=[
-    {l:"Teams",v:"20",accent:false},
+    {l:"Teams",v:String(teams.length),accent:false},
     {l:"Participants",v:String(tot),accent:false},
     ...(isAd?[{l:"Checked In",v:`${chkd}/${tot}`,accent:true}]:[]),
     ...(myTm?[{l:"Team Check-in",v:`${myTm.students.filter(st=>st.checkedIn).length}/${myTm.students.length}`,accent:true}]:[]),
@@ -531,6 +585,7 @@ function PgSchedule({user,teams,sched=[],prelimList=[]}){
               </div>
             </div>
           );})}
+          {items.length===0&&<EmptyState icon={<I.Cal/>} title={`No events on Day ${day}`} msg="Schedule items will appear here once they're posted."/>}
         </div>
       )}
     </div>
@@ -629,24 +684,28 @@ function PgVenue({venueList=[]}){
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
       <PageHeader eyebrow="Room Directory">Venue Map</PageHeader>
-      <div style={{display:"flex",flexDirection:"column",gap:16}}>
-        {floors.map((fl,fi)=>(
-          <div key={fi}>
-            <MonoTag style={{display:"block",marginBottom:12,color:s.txt2}}>{fl.label}</MonoTag>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
-              {venueList.filter(r=>r.floor===fl.key).map((r,ri)=>(
-                <div key={ri} style={{borderRadius:14,padding:"16px 18px",background:"#fafafb",border:"1px solid #ececef",transition:"transform 0.16s"}}
-                  onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
-                  onMouseLeave={e=>e.currentTarget.style.transform=""}>
-                  <div style={{fontSize:14,fontWeight:700,color:"#0d0f16",marginBottom:5}}>{r.name}</div>
-                  <div style={{fontSize:12,color:s.txt2,lineHeight:1.5}}>{r.purpose}</div>
-                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.1em",color:s.accent,marginTop:8}}>Cap: {r.cap}</div>
-                </div>
-              ))}
+      {venueList.length===0?
+        <EmptyState icon={<I.Map/>} title="No rooms listed" msg="Once venue rooms are added, they'll show up grouped by floor."/>
+      :
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          {floors.map((fl,fi)=>{const rooms=venueList.filter(r=>r.floor===fl.key);if(rooms.length===0)return null;return(
+            <div key={fi}>
+              <MonoTag style={{display:"block",marginBottom:12,color:s.txt2}}>{fl.label}</MonoTag>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
+                {rooms.map((r,ri)=>(
+                  <div key={ri} style={{borderRadius:14,padding:"16px 18px",background:"#fafafb",border:"1px solid #ececef",transition:"transform 0.16s"}}
+                    onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
+                    onMouseLeave={e=>e.currentTarget.style.transform=""}>
+                    <div style={{fontSize:14,fontWeight:700,color:"#0d0f16",marginBottom:5}}>{r.name}</div>
+                    <div style={{fontSize:12,color:s.txt2,lineHeight:1.5}}>{r.purpose}</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.1em",color:s.accent,marginTop:8}}>Cap: {r.cap}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          );})}
+        </div>
+      }
       <div style={{marginTop:20,padding:"12px 16px",borderRadius:12,background:"#fafafb",border:"1px solid #ececef",fontSize:13,color:s.txt2}}>
         Admin Office (1F) is staff HQ &amp; Lost &amp; Found.
       </div>
@@ -732,24 +791,37 @@ function PgRooms({user,teams,roomMap=[]}){
 
 function CheckinList({team,onChk,canToggle}){
   const cnt=team.students.filter(st=>st.checkedIn).length;
+  const complete=cnt===team.students.length;
   return(
     <div style={{borderRadius:14,padding:"16px 18px",background:"#fafafb",border:"1px solid #ececef"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
         <div style={{fontWeight:700,fontSize:14,color:"#0d0f16"}}>{team.name}</div>
-        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:700,color:cnt===team.students.length?s.accent:s.txt2}}>{cnt}/{team.students.length}</div>
+        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:700,color:complete?s.ok:s.txt2}}>{cnt}/{team.students.length}</div>
       </div>
-      <div style={{display:"flex",flexDirection:"column",gap:4}}>
-        {team.students.map(st=>(
-          <button key={st.id} onClick={canToggle?()=>onChk(team.id,st.id):undefined}
-            style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:9,border:`1px solid ${st.checkedIn?"#e0dbf8":"#ececef"}`,background:st.checkedIn?"#efedfb":"#fff",cursor:canToggle?"pointer":"default",fontFamily:"inherit",textAlign:"left",color:s.txt,transition:"border-color 0.13s"}}>
-            <div style={{width:17,height:17,borderRadius:4,border:`2px solid ${st.checkedIn?s.accent:s.border}`,background:st.checkedIn?s.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.13s"}}>
-              {st.checkedIn&&<span style={{color:"#fff",fontSize:9,fontWeight:800}}>✓</span>}
-            </div>
-            <span style={{fontSize:12,fontWeight:st.checkedIn?600:400,color:st.checkedIn?"#0d0f16":s.txt2}}>{st.name}</span>
-            {st.checkedIn&&<MonoTag style={{marginLeft:"auto"}}>In</MonoTag>}
-          </button>
-        ))}
-      </div>
+      <ul style={{listStyle:"none",display:"flex",flexDirection:"column",gap:4,padding:0,margin:0}}>
+        {team.students.map(st=>{
+          const id=`chk-${team.id}-${st.id}`;
+          const row=(
+            <span style={{flex:1,display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:9,border:`1px solid ${st.checkedIn?"#cbe7da":"#ececef"}`,background:st.checkedIn?"#eef9f4":"#fff",fontFamily:"inherit",color:s.txt,transition:"border-color 0.13s",cursor:canToggle?"pointer":"default"}}>
+              <span aria-hidden="true" style={{width:17,height:17,borderRadius:4,border:`2px solid ${st.checkedIn?s.ok:s.border}`,background:st.checkedIn?s.ok:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.13s"}}>
+                {st.checkedIn&&<span style={{color:"#fff",fontSize:9,fontWeight:800}}>✓</span>}
+              </span>
+              <span style={{fontSize:12,fontWeight:st.checkedIn?600:400,color:st.checkedIn?"#0d0f16":s.txt2}}>{st.name}</span>
+              {st.checkedIn&&<MonoTag style={{marginLeft:"auto",color:s.ok}}>In</MonoTag>}
+            </span>
+          );
+          return(
+            <li key={st.id} style={{display:"flex"}}>
+              {canToggle?(
+                <label htmlFor={id} style={{flex:1,display:"flex",cursor:"pointer"}}>
+                  <input id={id} type="checkbox" checked={!!st.checkedIn} onChange={()=>onChk(team.id,st.id)} style={srOnly} aria-label={`Toggle check-in for ${st.name}`}/>
+                  {row}
+                </label>
+              ):row}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -770,7 +842,7 @@ function PgCheckin({user,teams,onChk}){
             </div>
             <div style={{borderRadius:12,padding:"20px 18px",background:"rgba(255,255,255,0.06)"}}>
               <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.16em",textTransform:"uppercase",color:"#fff",opacity:0.5,marginBottom:10}}>Teams Complete</div>
-              <div style={{fontWeight:800,fontSize:44,lineHeight:1,letterSpacing:"-0.02em",color:"#fff"}}>{teams.filter(tm=>tm.students.every(st=>st.checkedIn)).length}/20</div>
+              <div style={{fontWeight:800,fontSize:44,lineHeight:1,letterSpacing:"-0.02em",color:"#fff"}}>{teams.filter(tm=>tm.students.every(st=>st.checkedIn)).length}/{teams.length}</div>
             </div>
           </div>
         </div>
@@ -841,17 +913,22 @@ function PgQna({user,items,onAns,onAsk}){
 
       {/* Ask form */}
       <div style={{borderRadius:18,padding:"22px 24px",background:"#fafafb",border:"1px solid #ececef",marginBottom:24}}>
+        <label htmlFor="qna-ask" style={{...srOnly}}>Ask a question</label>
         <MonoTag style={{display:"block",marginBottom:14,color:s.txt2}}>Ask a Question</MonoTag>
-        <div style={{display:"flex",gap:8,marginBottom:8}}>
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Type your question…" onKeyDown={e=>e.key==="Enter"&&q.trim()&&(onAsk(q.trim(),qCat),setQ(""))}
-            style={{flex:1,padding:"12px 14px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:13,fontFamily:"inherit"}}
+        <div style={{display:"flex",gap:8,marginBottom:8,alignItems:"flex-start"}}>
+          <textarea id="qna-ask" value={q} onChange={e=>setQ(e.target.value)} placeholder="Type your question — Cmd/Ctrl+Enter to submit"
+            rows={2}
+            onKeyDown={e=>{if((e.metaKey||e.ctrlKey)&&e.key==="Enter"&&q.trim()){onAsk(q.trim(),qCat);setQ("");}}}
+            style={{flex:1,padding:"12px 14px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:13,fontFamily:"inherit",resize:"vertical",lineHeight:1.5,minHeight:46}}
             onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
-          <select value={qCat} onChange={e=>setQCat(e.target.value)} style={{padding:"12px 12px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>
+          <select value={qCat} onChange={e=>setQCat(e.target.value)} aria-label="Question category" style={{padding:"12px 12px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>
             {["logistics","rules","technical","general","other"].map(c=><option key={c} value={c}>{c[0].toUpperCase()+c.slice(1)}</option>)}
           </select>
-          <button onClick={()=>{if(q.trim()){onAsk(q.trim(),qCat);setQ("")}}} style={{padding:"12px 20px",borderRadius:100,border:"none",background:s.accent,color:"#fff",cursor:"pointer",fontFamily:"inherit",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:6,transition:"all 0.14s"}}
-            onMouseEnter={e=>e.currentTarget.style.background=s.accentBright}
-            onMouseLeave={e=>e.currentTarget.style.background=s.accent}>
+          <button onClick={()=>{if(q.trim()){onAsk(q.trim(),qCat);setQ("")}}}
+            disabled={!q.trim()}
+            style={{padding:"12px 20px",borderRadius:100,border:"none",background:q.trim()?s.accent:"#e2e3eb",color:"#fff",cursor:q.trim()?"pointer":"not-allowed",fontFamily:"inherit",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:6,transition:"all 0.14s",opacity:q.trim()?1:0.7}}
+            onMouseEnter={e=>{if(q.trim())e.currentTarget.style.background=s.accentBright;}}
+            onMouseLeave={e=>{if(q.trim())e.currentTarget.style.background=s.accent;}}>
             <I.Send/>Ask
           </button>
         </div>
@@ -888,26 +965,35 @@ function PgQna({user,items,onAns,onAsk}){
                   {x.category&&<MonoTag style={{color:s.txt2}}>{x.category}</MonoTag>}
                 </div>
               </div>
-              {!x.a&&<MonoTag>Pending</MonoTag>}
+              {!x.a&&<MonoTag style={{color:s.warn}}>Pending</MonoTag>}
             </div>
             {x.a&&(
               <div style={{marginLeft:40,padding:"12px 16px",borderRadius:12,background:"#fff",border:"1px solid #ececef",position:"relative"}}>
-                <div style={{position:"absolute",left:0,top:8,bottom:8,width:3,borderRadius:2,background:s.accent}}/>
-                <MonoTag style={{display:"block",marginBottom:6,color:s.txt2}}>Answered by {x.aBy}</MonoTag>
+                <div style={{position:"absolute",left:0,top:8,bottom:8,width:3,borderRadius:2,background:s.ok}}/>
+                <MonoTag style={{display:"block",marginBottom:6,color:s.ok}}>Answered by {x.aBy}</MonoTag>
                 <div style={{fontSize:13,color:s.txt,lineHeight:1.6}}>{x.a}</div>
               </div>
             )}
             {!x.a&&canAns&&(
               <div style={{marginLeft:40,display:"flex",gap:8,marginTop:4}}>
-                <input value={ans[x.id]||""} onChange={e=>setAns(p=>({...p,[x.id]:e.target.value}))} placeholder="Write your answer…"
+                <label htmlFor={`qna-reply-${x.id}`} style={{...srOnly}}>Reply to question</label>
+                <input id={`qna-reply-${x.id}`} value={ans[x.id]||""} onChange={e=>setAns(p=>({...p,[x.id]:e.target.value}))} placeholder="Write your answer…"
+                  onKeyDown={e=>{if(e.key==="Enter"&&ans[x.id]?.trim()){onAns(x.id,ans[x.id].trim());setAns(p=>({...p,[x.id]:""}));}}}
                   style={{flex:1,padding:"10px 14px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:10,color:s.txt,fontSize:13,fontFamily:"inherit"}}
                   onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
                 <button onClick={()=>{if(ans[x.id]?.trim()){onAns(x.id,ans[x.id].trim());setAns(p=>({...p,[x.id]:""}));}}}
-                  style={{padding:"10px 18px",borderRadius:100,border:"none",background:s.accent,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Reply</button>
+                  disabled={!ans[x.id]?.trim()}
+                  style={{padding:"10px 18px",borderRadius:100,border:"none",background:ans[x.id]?.trim()?s.accent:"#e2e3eb",color:"#fff",fontSize:13,fontWeight:700,cursor:ans[x.id]?.trim()?"pointer":"not-allowed",fontFamily:"inherit",opacity:ans[x.id]?.trim()?1:0.7}}>Reply</button>
               </div>
             )}
           </div>
         ))}
+        {list.length===0&&items.length===0&&(
+          <EmptyState icon={<I.Msg/>} title="No questions yet" msg="Be the first to ask — Q&A is visible to everyone."/>
+        )}
+        {list.length===0&&items.length>0&&(
+          <EmptyState title="Nothing matches your filters" msg="Try clearing them above."/>
+        )}
       </div>
     </div>
   );
@@ -968,14 +1054,18 @@ function PgAnn({user,items,onAdd,onPin,onEdit,onDel}){
           <input value={ti} onChange={e=>setTi(e.target.value)} placeholder="Title…" style={inputSt} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
           <textarea value={bo} onChange={e=>setBo(e.target.value)} placeholder="Write your announcement…" rows={3} style={{...inputSt,resize:"vertical",lineHeight:1.5}} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
           <button onClick={()=>{if(ti.trim()&&bo.trim()){onAdd(ti.trim(),bo.trim());setTi("");setBo("")}}}
-            style={{padding:"11px 24px",borderRadius:100,border:"none",background:s.accent,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"all 0.14s"}}
-            onMouseEnter={e=>e.currentTarget.style.background=s.accentBright}
-            onMouseLeave={e=>e.currentTarget.style.background=s.accent}>Post</button>
+            disabled={!ti.trim()||!bo.trim()}
+            style={{padding:"11px 24px",borderRadius:100,border:"none",background:(ti.trim()&&bo.trim())?s.accent:"#e2e3eb",color:"#fff",fontSize:13,fontWeight:700,cursor:(ti.trim()&&bo.trim())?"pointer":"not-allowed",fontFamily:"inherit",transition:"all 0.14s",opacity:(ti.trim()&&bo.trim())?1:0.7}}
+            onMouseEnter={e=>{if(ti.trim()&&bo.trim())e.currentTarget.style.background=s.accentBright;}}
+            onMouseLeave={e=>{if(ti.trim()&&bo.trim())e.currentTarget.style.background=s.accent;}}>Post</button>
         </div>
       )}
       <div style={{display:"flex",flexDirection:"column"}}>
         {items.filter(a=>a.pinned).map(a=>renderAnn(a))}
         {items.filter(a=>!a.pinned).map(a=>renderAnn(a))}
+        {items.length===0&&(
+          <EmptyState icon={<I.Bell/>} title="No announcements yet" msg={isAd?"Post the first update above.":"Check back here when staff posts something."}/>
+        )}
       </div>
     </div>
   );
@@ -991,7 +1081,9 @@ function PgContacts({teams,smList=[]}){
         <Pill active={tab==="sm"} onClick={()=>setTab("sm")}>Senior Mentors</Pill>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {tab==="jm"?teams.map(tm=>(
+        {tab==="jm"&&teams.length===0?(
+          <EmptyState icon={<I.Ppl/>} title="No teams set up" msg="Teams will populate once they're seeded or added."/>
+        ):tab==="jm"?teams.map(tm=>(
           <div key={tm.id} style={{borderRadius:18,padding:"16px 22px",background:"#fafafb",border:"1px solid #ececef",display:"flex",alignItems:"center",gap:14,transition:"transform 0.16s"}}
             onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
             onMouseLeave={e=>e.currentTarget.style.transform=""}>
@@ -1007,7 +1099,9 @@ function PgContacts({teams,smList=[]}){
               <div style={{fontSize:11,color:s.txtM,marginTop:3}}>{tm.jmEmail}</div>
             </div>
           </div>
-        )):smList.map((sm,i)=>(
+        )):smList.length===0?(
+          <EmptyState icon={<I.Phn/>} title="No senior mentors listed" msg="Add them via Admin Console → Senior Mentors."/>
+        ):smList.map((sm,i)=>(
           <div key={i} style={{borderRadius:18,padding:"16px 22px",background:"#fafafb",border:"1px solid #ececef",display:"flex",alignItems:"center",gap:14,transition:"transform 0.16s"}}
             onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
             onMouseLeave={e=>e.currentTarget.style.transform=""}>
@@ -1067,7 +1161,7 @@ function PgSubmission({user,teams,submissions,onUpdate}){
             <div key={t.teamId} style={{borderRadius:12,padding:"12px 16px",background:"#fafafb",border:`1px solid ${isMine?"#e0dbf8":"#ececef"}`,position:"relative",transition:"transform 0.16s"}}
               onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
               onMouseLeave={e=>e.currentTarget.style.transform=""}>
-              {t.submitted&&<div style={{position:"absolute",left:0,top:12,bottom:12,width:3,borderRadius:3,background:s.accent}}/>}
+              {t.submitted&&<div style={{position:"absolute",left:0,top:12,bottom:12,width:3,borderRadius:3,background:s.ok}}/>}
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:13,fontWeight:700,color:"#0d0f16",marginBottom:2}}>{t.name}</div>
@@ -1081,7 +1175,7 @@ function PgSubmission({user,teams,submissions,onUpdate}){
                   )}
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-                  <MonoTag style={{color:t.submitted?s.accent:s.txt2}}>{t.submitted?"Submitted":"Pending"}</MonoTag>
+                  <MonoTag style={{color:t.submitted?s.ok:s.warn}}>{t.submitted?"Submitted":"Pending"}</MonoTag>
                   {canToggle&&(
                     <button onClick={()=>onUpdate(t.teamId,!t.submitted,user.name)}
                       style={{padding:"8px 16px",borderRadius:100,border:`1px solid ${t.submitted?"#dadade":"transparent"}`,background:t.submitted?"#fff":s.accent,color:t.submitted?s.txt:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"all 0.14s"}}

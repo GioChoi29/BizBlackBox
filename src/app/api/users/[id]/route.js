@@ -1,27 +1,60 @@
 import { NextResponse } from "next/server";
-import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/mongodb";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, safeObjectId, ROLES, canonicalUsername } from "@/lib/auth";
+
+const ALLOWED_FIELDS = ["name", "email", "role", "teamId", "username"];
 
 export async function PATCH(req, { params }) {
   const { error } = await requireAdmin();
   if (error) return error;
 
   const { id } = await params;
+  const oid = safeObjectId(id);
+  if (!oid) return NextResponse.json({ error: "invalid id" }, { status: 400 });
+
   const body = await req.json();
-  delete body.id;
-  delete body._id;
-  delete body.passwordHash;
-  delete body.initialPassword;
-  if (body.teamId != null && body.teamId !== "") body.teamId = parseInt(body.teamId);
-  else if (body.teamId === "") body.teamId = null;
+  const update = {};
+  for (const k of ALLOWED_FIELDS) {
+    if (k in body) update[k] = body[k];
+  }
+
+  if ("role" in update && !ROLES.includes(update.role)) {
+    return NextResponse.json({ error: "invalid role" }, { status: 400 });
+  }
+  if ("username" in update) {
+    update.username = canonicalUsername(update.username);
+    if (!update.username) {
+      return NextResponse.json({ error: "username cannot be blank" }, { status: 400 });
+    }
+  }
+  if ("teamId" in update) {
+    if (update.teamId === "" || update.teamId == null) {
+      update.teamId = null;
+    } else {
+      const n = parseInt(update.teamId);
+      if (!Number.isInteger(n)) {
+        return NextResponse.json({ error: "invalid teamId" }, { status: 400 });
+      }
+      update.teamId = n;
+    }
+  }
+  if ("email" in update && update.email === "") update.email = null;
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: "no valid fields to update" }, { status: 400 });
+  }
 
   const db = await getDb();
-  const result = await db.collection("users").updateOne(
-    { _id: new ObjectId(id) },
-    { $set: body }
-  );
-  if (result.matchedCount === 0) return NextResponse.json({ error: "not found" }, { status: 404 });
+  try {
+    const result = await db.collection("users").updateOne({ _id: oid }, { $set: update });
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: "not found" }, { status: 404 });
+    }
+  } catch (e) {
+    if (e.code === 11000) {
+      return NextResponse.json({ error: "username already exists" }, { status: 409 });
+    }
+    throw e;
+  }
   return NextResponse.json({ ok: true });
 }
 
@@ -30,8 +63,13 @@ export async function DELETE(_req, { params }) {
   if (error) return error;
 
   const { id } = await params;
+  const oid = safeObjectId(id);
+  if (!oid) return NextResponse.json({ error: "invalid id" }, { status: 400 });
+
   const db = await getDb();
-  const result = await db.collection("users").deleteOne({ _id: new ObjectId(id) });
+  const result = await db.collection("users").deleteOne({ _id: oid });
   if (result.deletedCount === 0) return NextResponse.json({ error: "not found" }, { status: 404 });
+  // Clean up that user's sessions so they're booted immediately.
+  await db.collection("sessions").deleteMany({ userId: id }).catch(() => {});
   return NextResponse.json({ ok: true });
 }

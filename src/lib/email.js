@@ -48,7 +48,7 @@ Sign in here: ${loginUrl}
       <div style="font-family:'JetBrains Mono',Menlo,monospace;font-size:13px;color:#5c6273;margin-bottom:6px">Temporary password</div>
       <div style="font-family:'JetBrains Mono',Menlo,monospace;font-size:16px;font-weight:700">${escapeHtml(tempPassword)}</div>
     </div>
-    <p><a href="${loginUrl}" style="display:inline-block;padding:11px 22px;border-radius:10px;background:#6c5ce7;color:#fff;text-decoration:none;font-weight:600">Sign in to the portal</a></p>
+    <p><a href="${escapeHtml(loginUrl)}" style="display:inline-block;padding:11px 22px;border-radius:10px;background:#6c5ce7;color:#fff;text-decoration:none;font-weight:600">Sign in to the portal</a></p>
     <p style="color:#9298B2;font-size:12px;margin-top:30px">— BBB 2026 Team</p>
   </div>`;
 
