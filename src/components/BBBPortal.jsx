@@ -347,13 +347,75 @@ export default function BBBPortal(){
   const crudDel=(path,id,reload)=>fetch(`${path}/${id}`,{method:"DELETE"}).then(reload);
   const saveTransport=(doc)=>fetch("/api/transport",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(doc)}).then(reloadTransport);
 
+  // Optimistic CRUD for students & users (admin). Each updates local React
+  // state immediately so the UI feels instant, sends the write in the
+  // background, and restores server truth via a refetch only on failure. The
+  // student/user collections are kept in sync by mirroring the server's
+  // cascade locally (deleting one side removes the linked entry on the other).
+  const studentActions={
+    // Add needs the server-generated id, so we await the write then splice the
+    // returned record straight in — no full-collection refetch.
+    add:async(teamId,addForm)=>{
+      const res=await fetch(`/api/teams/${teamId}/students`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(addForm)}).catch(()=>null);
+      if(!res||res.status===401){if(res)bounceToLogin();else toast.error("Network error");return null;}
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok){toast.error(data.error||"Failed to add student");return null;}
+      const tid=parseInt(teamId);
+      setTeams(p=>p.map(t=>t.id===tid?{...t,students:[...(t.students||[]),data]}:t));
+      return data;
+    },
+    update:async(teamId,studentId,form)=>{
+      setTeams(p=>p.map(t=>t.id===teamId?{...t,students:t.students.map(st=>st.id===studentId?{...st,...form}:st)}:t));
+      const res=await fetch(`/api/teams/${teamId}/students/${studentId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)}).catch(()=>null);
+      if(!res||!res.ok){const j=res?await res.json().catch(()=>({})):{};toast.error(j.error||"Couldn't save — reverted");reloadTeams();return false;}
+      return true;
+    },
+    // Mirror the server cascade: drop the roster entry AND the linked user.
+    remove:async(teamId,studentId,userId)=>{
+      setTeams(p=>p.map(t=>t.id===teamId?{...t,students:t.students.filter(st=>st.id!==studentId)}:t));
+      if(userId)setUsers(p=>p.filter(u=>u.id!==String(userId)));
+      const res=await fetch(`/api/teams/${teamId}/students/${studentId}`,{method:"DELETE"}).catch(()=>null);
+      if(!res||!res.ok){const j=res?await res.json().catch(()=>({})):{};toast.error(j.error||"Couldn't delete — reverted");reloadTeams();reloadUsers();return false;}
+      return true;
+    },
+  };
+  const userActions={
+    // Add awaits the response (needs the generated id + temp password), then
+    // splices the user in. If a roster entry was linked, refetch teams in the
+    // background so the Students tab reflects it.
+    add:async(form)=>{
+      const res=await fetch("/api/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)}).catch(()=>null);
+      if(!res||res.status===401){if(res)bounceToLogin();else toast.error("Network error");return null;}
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok){toast.error(data.error||"Failed to add user");return null;}
+      setUsers(p=>[...p,{id:data.id,name:data.name,username:data.username,email:data.email,role:data.role,teamId:data.teamId,mustChangePassword:true}]);
+      if(data.studentLinked)reloadTeams();
+      return data;
+    },
+    update:async(id,form)=>{
+      const teamId=form.teamId===""||form.teamId==null?null:parseInt(form.teamId);
+      setUsers(p=>p.map(u=>u.id===id?{...u,...form,teamId}:u));
+      const res=await fetch(`/api/users/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)}).catch(()=>null);
+      if(!res||!res.ok){toast.error("Couldn't update — reverted");reloadUsers();return false;}
+      return true;
+    },
+    // Mirror the server cascade: drop the user AND any roster entry linked to it.
+    remove:async(id)=>{
+      setUsers(p=>p.filter(u=>u.id!==id));
+      setTeams(p=>p.map(t=>({...t,students:(t.students||[]).filter(st=>String(st.userId)!==id)})));
+      const res=await fetch(`/api/users/${id}`,{method:"DELETE"}).catch(()=>null);
+      if(!res||!res.ok){toast.error("Couldn't delete — reverted");reloadUsers();reloadTeams();return false;}
+      return true;
+    },
+  };
+
   const adminApi={
     sched:{items:sched,add:d=>crudAdd("/api/schedule",d,reloadSched),edit:(id,d)=>crudEdit("/api/schedule",id,d,reloadSched),del:id=>crudDel("/api/schedule",id,reloadSched)},
     sm:{items:smList,add:d=>crudAdd("/api/mentors-sm",d,reloadSm),edit:(id,d)=>crudEdit("/api/mentors-sm",id,d,reloadSm),del:id=>crudDel("/api/mentors-sm",id,reloadSm)},
     venue:{items:venueList,add:d=>crudAdd("/api/venue",d,reloadVenue),edit:(id,d)=>crudEdit("/api/venue",id,d,reloadVenue),del:id=>crudDel("/api/venue",id,reloadVenue)},
     prelim:{items:prelimList,add:d=>crudAdd("/api/prelim",d,reloadPrelim),edit:(id,d)=>crudEdit("/api/prelim",id,d,reloadPrelim),del:id=>crudDel("/api/prelim",id,reloadPrelim)},
     roomMap:{items:roomMap,add:d=>crudAdd("/api/room-map",d,reloadRoomMap),edit:(id,d)=>crudEdit("/api/room-map",id,d,reloadRoomMap),del:id=>crudDel("/api/room-map",id,reloadRoomMap)},
-    users:{items:users,reload:async()=>{await reloadUsers();await reloadTeams();}},
+    users:{items:users,actions:userActions,reload:reloadUsers},
     transport:{doc:transport,save:saveTransport},
   };
 
@@ -375,7 +437,7 @@ export default function BBBPortal(){
     contacts:<PgContacts teams={teams} smList={smList}/>,
     submission:<PgSubmission user={user} teams={teams} submissions={submissions} onUpdate={setSubmissionStatus}/>,
     checkin:<PgCheckin user={user} teams={teams} onChk={chk}/>,
-    students:user.role===ROLES.ADMIN?<PgStudents teams={teams} roomMap={roomMap} reloadTeams={reloadTeams} reloadUsers={reloadUsers}/>:null,
+    students:user.role===ROLES.ADMIN?<PgStudents teams={teams} roomMap={roomMap} actions={studentActions}/>:null,
     admin:user.role===ROLES.ADMIN?<PgAdmin api={adminApi}/>:null,
     qna:<PgQna user={user} items={qna} onAns={answerQna} onAsk={askQna}/>,
     announcements:<PgAnn user={user} items={ann} onAdd={addAnn} onPin={pinAnn} onEdit={editAnn} onDel={delAnn}/>,
@@ -1343,7 +1405,7 @@ function PasswordRevealModal({creds,onClose}){
 }
 
 function AdminUsersTable({section}){
-  const{items,reload}=section;
+  const{items,actions,reload}=section;
   const addFields=[{k:"name",l:"Name"},{k:"username",l:"Username"},{k:"email",l:"Email (for credentials)"},{k:"role",l:"Role",options:[{v:"student",l:"Student"},{v:"junior_mentor",l:"JM"},{v:"senior_mentor",l:"SM"},{v:"admin",l:"Admin"}]},{k:"teamId",l:"Team ID",type:"number"}];
   const editFields=[{k:"name",l:"Name"},{k:"email",l:"Email"},{k:"role",l:"Role",options:[{v:"student",l:"Student"},{v:"junior_mentor",l:"JM"},{v:"senior_mentor",l:"SM"},{v:"admin",l:"Admin"}]},{k:"teamId",l:"Team ID",type:"number"}];
   const[editingId,setEditingId]=useState(null);
@@ -1352,21 +1414,18 @@ function AdminUsersTable({section}){
   const[query,setQuery]=useState("");
 
   const submitAdd=async(form)=>{
-    const res=await fetch("/api/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});
-    const data=await res.json();
-    if(!res.ok){alert(data.error||"Failed to add user");return;}
+    const data=await actions.add(form);
+    if(!data)return;
     setCreds({username:data.username,password:data.initialPassword,email:data.email,emailSent:data.emailSent,emailError:data.emailError});
     setAdding(false);
-    reload();
   };
   const submitEdit=async(id,form)=>{
-    const res=await fetch(`/api/users/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});
-    if(!res.ok){alert("Failed to update user");return;}
-    setEditingId(null);reload();
+    setEditingId(null); // optimistic — close the editor immediately
+    actions.update(id,form);
   };
   const del=async(id,username)=>{
     if(!confirm(`Delete ${username}? They will be unable to sign in.`))return;
-    await fetch(`/api/users/${id}`,{method:"DELETE"});reload();
+    actions.remove(id);
   };
   const resetPwd=async(user)=>{
     if(!confirm(`Reset password for ${user.username}? They will be signed out and need to use the new temporary password.`))return;
@@ -1597,13 +1656,12 @@ function AddStudentModal({teams,form,setForm,onSave,onClose,saving}){
   );
 }
 
-function PgStudents({teams,roomMap=[],reloadTeams,reloadUsers}){
+function PgStudents({teams,roomMap=[],actions}){
   const rmLookup=Object.fromEntries(roomMap.map(r=>[r.person,{room:r.room,floor:r.floor}]));
   const[srch,setSrch]=useState("");
   const[selKey,setSelKey]=useState(null); // {teamId, studentId}
   const[editing,setEditing]=useState(false);
   const[form,setForm]=useState(null);
-  const[saving,setSaving]=useState(false);
   const[addOpen,setAddOpen]=useState(false);
   const[addForm,setAddForm]=useState({teamId:"",name:"",phone:"",email:"",transport:"",insurance:"",emergencyName:"",emergencyRel:"",emergencyPhone:""});
   const[addSaving,setAddSaving]=useState(false);
@@ -1614,10 +1672,8 @@ function PgStudents({teams,roomMap=[],reloadTeams,reloadUsers}){
     if(!addForm.teamId)return alert("Pick a team");
     setAddSaving(true);
     try{
-      const res=await fetch(`/api/teams/${addForm.teamId}/students`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(addForm)});
-      if(!res.ok){const j=await res.json().catch(()=>({}));alert(j.error||"Failed to add student");return;}
-      const newStudent=await res.json();
-      await Promise.all([reloadTeams?.(),reloadUsers?.()]);
+      const newStudent=await actions.add(addForm.teamId,addForm);
+      if(!newStudent)return;
       setAddOpen(false);
       setSelKey({teamId:parseInt(addForm.teamId),studentId:newStudent.id});
     }finally{setAddSaving(false);}
@@ -1625,10 +1681,8 @@ function PgStudents({teams,roomMap=[],reloadTeams,reloadUsers}){
   const deleteStudent=async()=>{
     if(!sel)return;
     if(!confirm(`Delete ${sel.name}? This removes them from ${sel.team.name} and cannot be undone.`))return;
-    const res=await fetch(`/api/teams/${sel.team.id}/students/${sel.id}`,{method:"DELETE"});
-    if(!res.ok){const j=await res.json().catch(()=>({}));alert(j.error||"Failed to delete");return;}
-    await Promise.all([reloadTeams?.(),reloadUsers?.()]);
-    setSelKey(null);
+    setSelKey(null); // optimistic — close the detail view immediately
+    actions.remove(sel.team.id,sel.id,sel.userId);
   };
 
   const allStudents=[];
@@ -1648,14 +1702,11 @@ function PgStudents({teams,roomMap=[],reloadTeams,reloadUsers}){
     setEditing(true);
   };
   const cancelEdit=()=>{setEditing(false);setForm(null);};
-  const saveEdit=async()=>{
-    setSaving(true);
-    try{
-      const res=await fetch(`/api/teams/${sel.team.id}/students/${sel.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});
-      if(!res.ok){const j=await res.json().catch(()=>({}));alert(j.error||"Failed to save");return;}
-      await Promise.all([reloadTeams?.(),reloadUsers?.()]);
-      setEditing(false);setForm(null);
-    }finally{setSaving(false);}
+  const saveEdit=()=>{
+    // Optimistic: apply locally and close the editor immediately; the write
+    // runs in the background and self-heals on failure.
+    actions.update(sel.team.id,sel.id,form);
+    setEditing(false);setForm(null);
   };
 
   const srchLow=srch.toLowerCase();
@@ -1686,8 +1737,8 @@ function PgStudents({teams,roomMap=[],reloadTeams,reloadUsers}){
               </>
               :
               <>
-                <button onClick={cancelEdit} disabled={saving} style={{padding:"9px 16px",borderRadius:100,border:`1px solid ${s.border}`,background:"#fff",color:s.txt2,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
-                <button onClick={saveEdit} disabled={saving} style={{padding:"9px 18px",borderRadius:100,border:"none",background:s.accent,color:"#fff",fontSize:13,fontWeight:700,cursor:saving?"wait":"pointer",fontFamily:"inherit",opacity:saving?0.7:1}}>{saving?"Saving…":"Save"}</button>
+                <button onClick={cancelEdit} style={{padding:"9px 16px",borderRadius:100,border:`1px solid ${s.border}`,background:"#fff",color:s.txt2,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
+                <button onClick={saveEdit} style={{padding:"9px 18px",borderRadius:100,border:"none",background:s.accent,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Save</button>
               </>
             }
           </div>
