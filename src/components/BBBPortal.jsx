@@ -216,7 +216,6 @@ export default function BBBPortal(){
   const[smList,setSmList]=useState([]);
   const[venueList,setVenueList]=useState([]);
   const[prelimList,setPrelimList]=useState([]);
-  const[roomMap,setRoomMap]=useState([]);
   const[transport,setTransport]=useState(null);
   const[users,setUsers]=useState([]);
   const[moreOpen,setMoreOpen]=useState(false);
@@ -244,7 +243,6 @@ export default function BBBPortal(){
   const reloadSm=()=>fetch("/api/mentors-sm").then(safeArr(setSmList)).catch(()=>setSmList([]));
   const reloadVenue=()=>fetch("/api/venue").then(safeArr(setVenueList)).catch(()=>setVenueList([]));
   const reloadPrelim=()=>fetch("/api/prelim").then(safeArr(setPrelimList)).catch(()=>setPrelimList([]));
-  const reloadRoomMap=()=>fetch("/api/room-map").then(safeArr(setRoomMap)).catch(()=>setRoomMap([]));
   const reloadTransport=()=>fetch("/api/transport").then(r=>{
     if(r.status===401){bounceToLogin();return;}
     if(!r.ok){setTransport(null);return;}
@@ -267,7 +265,7 @@ export default function BBBPortal(){
   useEffect(()=>{
     if(!user)return;
     reloadTeams();reloadSubs();reloadQna();reloadAnn();
-    reloadSched();reloadSm();reloadVenue();reloadPrelim();reloadRoomMap();reloadTransport();
+    reloadSched();reloadSm();reloadVenue();reloadPrelim();reloadTransport();
     if(user.role===ROLES.ADMIN)reloadUsers();
   },[user]);
 
@@ -393,8 +391,11 @@ export default function BBBPortal(){
       return data;
     },
     update:async(id,form)=>{
-      const teamId=form.teamId===""||form.teamId==null?null:parseInt(form.teamId);
-      setUsers(p=>p.map(u=>u.id===id?{...u,...form,teamId}:u));
+      // Only normalize teamId when the form actually carries it — a room-only
+      // edit (from the Rooms tab) must not clobber the user's team.
+      const patch={...form};
+      if("teamId" in form)patch.teamId=form.teamId===""||form.teamId==null?null:parseInt(form.teamId);
+      setUsers(p=>p.map(u=>u.id===id?{...u,...patch}:u));
       const res=await fetch(`/api/users/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)}).catch(()=>null);
       if(!res||!res.ok){toast.error("Couldn't update — reverted");reloadUsers();return false;}
       return true;
@@ -414,7 +415,7 @@ export default function BBBPortal(){
     sm:{items:smList,add:d=>crudAdd("/api/mentors-sm",d,reloadSm),edit:(id,d)=>crudEdit("/api/mentors-sm",id,d,reloadSm),del:id=>crudDel("/api/mentors-sm",id,reloadSm)},
     venue:{items:venueList,add:d=>crudAdd("/api/venue",d,reloadVenue),edit:(id,d)=>crudEdit("/api/venue",id,d,reloadVenue),del:id=>crudDel("/api/venue",id,reloadVenue)},
     prelim:{items:prelimList,add:d=>crudAdd("/api/prelim",d,reloadPrelim),edit:(id,d)=>crudEdit("/api/prelim",id,d,reloadPrelim),del:id=>crudDel("/api/prelim",id,reloadPrelim)},
-    roomMap:{items:roomMap,add:d=>crudAdd("/api/room-map",d,reloadRoomMap),edit:(id,d)=>crudEdit("/api/room-map",id,d,reloadRoomMap),del:id=>crudDel("/api/room-map",id,reloadRoomMap)},
+    rooms:{teams,users,updateStudent:studentActions.update,updateUser:userActions.update},
     users:{items:users,actions:userActions,reload:reloadUsers},
     transport:{doc:transport,save:saveTransport},
   };
@@ -433,11 +434,11 @@ export default function BBBPortal(){
     teams:<PgTeams user={user} teams={teams}/>,
     transport:<PgTransport transport={transport}/>,
     venue:<PgVenue venueList={venueList}/>,
-    rooms:<PgRooms user={user} teams={teams} roomMap={roomMap}/>,
+    rooms:<PgRooms user={user} teams={teams} users={users}/>,
     contacts:<PgContacts teams={teams} smList={smList}/>,
     submission:<PgSubmission user={user} teams={teams} submissions={submissions} onUpdate={setSubmissionStatus}/>,
     checkin:<PgCheckin user={user} teams={teams} onChk={chk}/>,
-    students:user.role===ROLES.ADMIN?<PgStudents teams={teams} roomMap={roomMap} actions={studentActions}/>:null,
+    students:user.role===ROLES.ADMIN?<PgStudents teams={teams} actions={studentActions}/>:null,
     admin:user.role===ROLES.ADMIN?<PgAdmin api={adminApi}/>:null,
     qna:<PgQna user={user} items={qna} onAns={answerQna} onAsk={askQna}/>,
     announcements:<PgAnn user={user} items={ann} onAdd={addAnn} onPin={pinAnn} onEdit={editAnn} onDel={delAnn}/>,
@@ -785,14 +786,19 @@ function RoomHero({room,floor,label,icon}){
     </div>
   );
 }
-function PgRooms({user,teams,roomMap=[]}){
+function PgRooms({user,teams,users=[]}){
   const myTm=user.team?teams.find(x=>x.id===user.team):null;
   const[roomSrch,setRoomSrch]=useState("");
-  const rmLookup=Object.fromEntries(roomMap.map(r=>[r.person,{room:r.room,floor:r.floor}]));
   if(user.role===ROLES.ADMIN){
+    // Room data now lives on each person's record: students on their roster
+    // entry, mentors on their user doc.
     const byRoom={};
-    teams.forEach(tm=>tm.students.forEach(st=>{const ra=rmLookup[st.name];if(ra){if(!byRoom[ra.room])byRoom[ra.room]=[];byRoom[ra.room].push({...st,team:tm.name});}}));
-    teams.forEach(tm=>{const ra=rmLookup[tm.jm];if(ra){if(!byRoom[ra.room])byRoom[ra.room]=[];byRoom[ra.room].push({name:tm.jm,team:tm.name,isMentor:true});}});
+    const push=(room,person)=>{if(!room)return;(byRoom[room]=byRoom[room]||[]).push(person);};
+    teams.forEach(tm=>tm.students.forEach(st=>push(st.room,{...st,team:tm.name})));
+    users.filter(u=>u.role==="junior_mentor"||u.role==="senior_mentor").forEach(u=>{
+      const tName=u.teamId!=null?(teams.find(t=>t.id===u.teamId)?.name||`Team ${u.teamId}`):"Staff";
+      push(u.room,{name:u.name,team:tName,isMentor:true});
+    });
     const sorted=Object.entries(byRoom).sort((a,b)=>a[0].localeCompare(b[0]));
     const srchLow=roomSrch.toLowerCase();
     const filtSorted=roomSrch.trim()?sorted.filter(([,ppl])=>ppl.some(p=>p.name.toLowerCase().includes(srchLow))):sorted;
@@ -824,7 +830,8 @@ function PgRooms({user,teams,roomMap=[]}){
     );
   }
   if(user.role===ROLES.STUDENT){
-    const myRoom=rmLookup[user.name];
+    const me=myTm?.students?.find(st=>String(st.userId)===String(user.id));
+    const myRoom=me?{room:me.room,floor:me.floor}:null;
     return(
       <div style={{animation:"fadeUp 0.4s ease"}}>
         <PageHeader eyebrow="Dormitory">My Room</PageHeader>
@@ -834,7 +841,7 @@ function PgRooms({user,teams,roomMap=[]}){
     );
   }
   if(user.role===ROLES.JM){
-    const myRoom=rmLookup[user.name]||(myTm?rmLookup[myTm.jm]:null);
+    const myRoom=user.room?{room:user.room,floor:user.floor}:null;
     return(
       <div style={{animation:"fadeUp 0.4s ease"}}>
         <PageHeader eyebrow="Dormitory">My Room</PageHeader>
@@ -843,10 +850,13 @@ function PgRooms({user,teams,roomMap=[]}){
       </div>
     );
   }
+  const myRoom=user.room?{room:user.room,floor:user.floor}:null;
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
       <PageHeader eyebrow="Dormitory">My Room</PageHeader>
-      <Card style={{padding:"24px",textAlign:"center"}}><p style={{fontSize:14,color:s.txt2}}>Room assignments for senior mentors will be shared separately. Please check with Admin.</p></Card>
+      {myRoom
+        ?<RoomHero room={myRoom.room} floor={myRoom.floor} label="Your Dorm Room" icon={<I.Bed/>}/>
+        :<Card style={{padding:"24px",textAlign:"center"}}><p style={{fontSize:14,color:s.txt2}}>No room assigned yet. Please check with Admin.</p></Card>}
     </div>
   );
 }
@@ -1471,6 +1481,54 @@ function AdminUsersTable({section}){
   );
 }
 
+// Room assignment for everyone in one place. Students write to their roster
+// entry, mentors to their user record — same sources the Students tab and
+// Rooms page read, so a change here shows up everywhere.
+function AdminRoomsTable({section}){
+  const{teams,users,updateStudent,updateUser}=section;
+  const[query,setQuery]=useState("");
+  const rows=[];
+  (teams||[]).forEach(tm=>(tm.students||[]).forEach(st=>rows.push({
+    key:`s-${tm.id}-${st.id}`,name:st.name,sub:tm.name,room:st.room||"",floor:st.floor||"",
+    save:(patch)=>updateStudent(tm.id,st.id,patch),
+  })));
+  (users||[]).filter(u=>u.role==="junior_mentor"||u.role==="senior_mentor").forEach(u=>rows.push({
+    key:`u-${u.id}`,name:u.name,sub:u.role==="senior_mentor"?"Senior Mentor":(u.teamId!=null?`JM · Team ${u.teamId}`:"JM"),room:u.room||"",floor:u.floor||"",
+    save:(patch)=>updateUser(u.id,patch),
+  }));
+  const q=query.trim().toLowerCase();
+  const filtered=q?rows.filter(r=>r.name.toLowerCase().includes(q)||r.sub.toLowerCase().includes(q)):rows;
+  return(
+    <div>
+      <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by name…" style={{...adminInputSt,marginBottom:12}}/>
+      <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 0.7fr",gap:10,padding:"0 14px 8px",fontFamily:"'JetBrains Mono',monospace",fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:s.txt2}}>
+        <div>Person</div><div>Room</div><div>Floor</div>
+      </div>
+      {filtered.map(r=><RoomAssignRow key={r.key} row={r}/>)}
+      {filtered.length===0&&<div style={{padding:14,color:s.txt2,fontSize:13}}>No matching people.</div>}
+    </div>
+  );
+}
+function RoomAssignRow({row}){
+  const[room,setRoom]=useState(row.room);
+  const[floor,setFloor]=useState(row.floor);
+  // Re-sync the draft if the underlying record changes (e.g. another edit).
+  useEffect(()=>{setRoom(row.room);},[row.room]);
+  useEffect(()=>{setFloor(row.floor);},[row.floor]);
+  return(
+    <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 0.7fr",gap:10,alignItems:"center",padding:"8px 14px",borderRadius:10,background:"#fafafb",border:`1px solid ${s.border}`,marginBottom:6}}>
+      <div style={{fontSize:13,color:s.txt,overflow:"hidden"}}>
+        <div style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.name}</div>
+        <div style={{fontSize:11,color:s.txt2}}>{row.sub}</div>
+      </div>
+      <input value={room} onChange={e=>setRoom(e.target.value)} onBlur={()=>{if(room!==row.room)row.save({room});}} placeholder="—" style={adminInputSt}/>
+      <select value={floor} onChange={e=>{setFloor(e.target.value);row.save({floor:e.target.value});}} style={adminInputSt}>
+        <option value="">—</option><option value="1F">1F</option><option value="2F">2F</option><option value="3F">3F</option>
+      </select>
+    </div>
+  );
+}
+
 function AdminScheduleEditor({section}){
   const{items,add,edit,del}=section;
   const[day,setDay]=useState(1);
@@ -1554,7 +1612,7 @@ function PgAdmin({api}){
     sm:{label:"Senior Mentors",fields:[{k:"name",l:"Name"},{k:"phone",l:"Phone"},{k:"email",l:"Email"},{k:"teams",l:"Teams Range"}]},
     venue:{label:"Venue",fields:[{k:"name",l:"Name"},{k:"floor",l:"Floor",options:[{v:"1F",l:"1F"},{v:"2F",l:"2F"},{v:"3F",l:"3F"}]},{k:"purpose",l:"Purpose"},{k:"cap",l:"Capacity"}]},
     prelim:{label:"Prelim Brackets",fields:[{k:"teams",l:"Team IDs (csv)",type:"csv-num"},{k:"time",l:"Time"},{k:"room",l:"Room"}]},
-    roomMap:{label:"Room Map",fields:[{k:"person",l:"Person"},{k:"room",l:"Room"},{k:"floor",l:"Floor",options:[{v:"1F",l:"1F"},{v:"2F",l:"2F"},{v:"3F",l:"3F"}]}]},
+    rooms:{label:"Rooms"},
     users:{label:"Users"},
     transport:{label:"Transport (one doc)"},
   };
@@ -1570,6 +1628,8 @@ function PgAdmin({api}){
         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,color:s.accent,marginBottom:16}}>{current.label}</div>
         {tab==="transport"?
           <AdminTransport section={api.transport}/>:
+        tab==="rooms"?
+          <AdminRoomsTable section={api.rooms}/>:
         tab==="users"?
           <AdminUsersTable section={api.users}/>:
         tab==="sched"?
@@ -1656,8 +1716,7 @@ function AddStudentModal({teams,form,setForm,onSave,onClose,saving}){
   );
 }
 
-function PgStudents({teams,roomMap=[],actions}){
-  const rmLookup=Object.fromEntries(roomMap.map(r=>[r.person,{room:r.room,floor:r.floor}]));
+function PgStudents({teams,actions}){
   const[srch,setSrch]=useState("");
   const[selKey,setSelKey]=useState(null); // {teamId, studentId}
   const[editing,setEditing]=useState(false);
@@ -1686,13 +1745,15 @@ function PgStudents({teams,roomMap=[],actions}){
   };
 
   const allStudents=[];
-  teams.forEach(tm=>tm.students.forEach(st=>allStudents.push({...st,team:tm,room:rmLookup[st.name]?.room||null,floor:rmLookup[st.name]?.floor||null})));
+  teams.forEach(tm=>tm.students.forEach(st=>allStudents.push({...st,team:tm,room:st.room||null,floor:st.floor||null})));
   const sel=selKey?allStudents.find(st=>st.team.id===selKey.teamId&&st.id===selKey.studentId):null;
 
   const startEdit=()=>{
     setForm({
       phone:sel.phone||"",
       email:sel.email||"",
+      room:sel.room||"",
+      floor:sel.floor||"",
       transport:sel.transport||"",
       insurance:sel.insurance||"",
       emergencyName:sel.emergencyName||"",
@@ -1715,7 +1776,8 @@ function PgStudents({teams,roomMap=[],actions}){
   if(sel){
     const sections=[
       {label:"Contact",keys:[["phone","Phone",true],["email","Email",false]]},
-      {label:"Room & Team",readonly:true,fields:[{l:"Dorm Room",v:sel.room,m:true},{l:"Work Room",v:sel.team.workRoom,m:true}]},
+      {label:"Dorm Room",keys:[["room","Room",true],["floor","Floor",true]]},
+      {label:"Work Room",readonly:true,fields:[{l:"Work Room",v:sel.team.workRoom,m:true}]},
       {label:"Logistics",keys:[["transport","Transport",false],["insurance","Insurance",false]]},
       {label:"Emergency Contact",keys:[["emergencyName","Name",false],["emergencyRel","Relationship",false],["emergencyPhone","Phone",true]]},
     ];

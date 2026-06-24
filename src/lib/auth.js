@@ -150,6 +150,8 @@ export function publicUser(u) {
     email: u.email || null,
     role: u.role,
     team: u.teamId ?? null,
+    room: u.room ?? null,
+    floor: u.floor ?? null,
     mustChangePassword: !!u.mustChangePassword,
   };
 }

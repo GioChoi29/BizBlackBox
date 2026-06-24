@@ -14,6 +14,9 @@ export function buildTeams() {
       checkedIn: false,
       phone: null,
       email: null,
+      // Dorm room lives on the roster entry (8 students share a room).
+      room: `Room ${301 + i}`,
+      floor: "3F",
       transport: null,
       insurance: null,
       emergencyName: null,
@@ -45,6 +48,9 @@ export function buildUsers() {
       role: "junior_mentor",
       teamId: i + 1,
       email: `jm.${n.toLowerCase()}@bbb.org`,
+      // Mentor dorm room lives on the user record.
+      room: `Room ${321 + Math.floor(i / 4)}`,
+      floor: "3F",
       mustChangePassword: true,
     });
     for (let j = 0; j < 8; j++) {
@@ -153,17 +159,6 @@ export function buildPrelim() {
     { teams: [11, 12, 13, 14, 15], time: "10:30 – 11:15", room: "Presentation Hall B" },
     { teams: [16, 17, 18, 19, 20], time: "11:15 – 12:00", room: "Presentation Hall B" },
   ];
-}
-
-export function buildRoomMap() {
-  const out = [];
-  for (let i = 0; i < 160; i++) {
-    out.push({ person: `Student ${i + 1}`, room: `Room ${301 + Math.floor(i / 8)}`, floor: "3F" });
-  }
-  TN.forEach((n, i) => {
-    out.push({ person: `JM ${n}`, room: `Room ${321 + Math.floor(i / 4)}`, floor: "3F" });
-  });
-  return out;
 }
 
 export function buildTransport() {

@@ -22,6 +22,8 @@ export async function GET() {
     email: x.email || null,
     role: x.role,
     teamId: x.teamId ?? null,
+    room: x.room ?? null,
+    floor: x.floor ?? null,
     mustChangePassword: !!x.mustChangePassword,
   })));
 }

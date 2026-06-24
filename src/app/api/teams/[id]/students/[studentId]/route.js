@@ -12,6 +12,8 @@ const ALLOWED_FIELDS = [
   "emergencyName",
   "emergencyRel",
   "emergencyPhone",
+  "room",
+  "floor",
 ];
 
 export async function DELETE(_req, { params }) {

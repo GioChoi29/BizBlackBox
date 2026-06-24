@@ -11,7 +11,6 @@ import {
   buildMentorsSM,
   buildVenue,
   buildPrelim,
-  buildRoomMap,
   buildTransport,
   SEED_PASSWORD,
 } from "@/lib/seedData";
@@ -38,7 +37,7 @@ export async function POST() {
   const db = await getDb();
   const collections = [
     "teams", "submissions", "users", "qna", "announcements",
-    "schedule", "mentors_sm", "venue", "prelim", "room_map",
+    "schedule", "mentors_sm", "venue", "prelim",
     "transport", "sessions",
   ];
   await Promise.all(collections.map((c) => db.collection(c).deleteMany({})));
@@ -56,7 +55,6 @@ export async function POST() {
     db.collection("mentors_sm").insertMany(buildMentorsSM()),
     db.collection("venue").insertMany(buildVenue()),
     db.collection("prelim").insertMany(buildPrelim()),
-    db.collection("room_map").insertMany(buildRoomMap()),
     db.collection("transport").insertOne(buildTransport()),
   ]);
 
@@ -64,7 +62,6 @@ export async function POST() {
   await db.collection("users").createIndex({ username: 1 }, { unique: true, sparse: true });
   await db.collection("users").createIndex({ email: 1 }, { sparse: true });
   await db.collection("schedule").createIndex({ day: 1, order: 1 });
-  await db.collection("room_map").createIndex({ person: 1 });
   await db.collection("sessions").createIndex({ token: 1 }, { unique: true });
   await db.collection("sessions").createIndex({ userId: 1 });
   await db.collection("sessions").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });

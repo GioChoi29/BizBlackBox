@@ -3,7 +3,7 @@ import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/mongodb";
 import { requireAdmin, safeObjectId, ROLES, canonicalUsername } from "@/lib/auth";
 
-const ALLOWED_FIELDS = ["name", "email", "role", "teamId", "username"];
+const ALLOWED_FIELDS = ["name", "email", "role", "teamId", "username", "room", "floor"];
 
 export async function PATCH(req, { params }) {
   const { error } = await requireAdmin();
