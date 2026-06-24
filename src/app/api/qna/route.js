@@ -25,11 +25,11 @@ export async function POST(req) {
   const doc = {
     q: q.trim(),
     by: user.name,
+    byId: user._id.toString(),
     tm: user.teamId ?? null,
-    a: null,
-    aBy: null,
     ts: Date.now(),
     category: category || "general",
+    replies: [],
   };
   const result = await db.collection("qna").insertOne(doc);
   return NextResponse.json({ ...doc, id: result.insertedId.toString() });

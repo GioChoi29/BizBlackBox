@@ -88,10 +88,14 @@ export function buildUsers() {
 
 export function buildQna() {
   const BASE = 1737129600000;
+  // Each question carries a `replies` thread; questions and replies record the
+  // author's user id (null in seed data) so follow-ups and edit rights resolve.
   return [
-    { q: "What should we bring for the overnight stay?", by: "Student 3", tm: 1, a: "Bring toiletries, a change of clothes, laptop + charger. Bedding is provided.", aBy: "Admin", ts: BASE - 3600000, category: "logistics" },
-    { q: "Can we use external data sources?", by: "Student 15", tm: 2, a: "Yes, any publicly available data. No proprietary databases.", aBy: "Admin", ts: BASE - 1800000, category: "rules" },
-    { q: "Is there Wi-Fi at the venue?", by: "Student 40", tm: 5, a: null, aBy: null, ts: BASE - 600000, category: "logistics" },
+    { q: "What should we bring for the overnight stay?", by: "Student 3", byId: null, tm: 1, ts: BASE - 3600000, category: "logistics",
+      replies: [{ id: "seed-r1", text: "Bring toiletries, a change of clothes, laptop + charger. Bedding is provided.", by: "Admin", byId: null, role: "admin", ts: BASE - 3500000 }] },
+    { q: "Can we use external data sources?", by: "Student 15", byId: null, tm: 2, ts: BASE - 1800000, category: "rules",
+      replies: [{ id: "seed-r2", text: "Yes, any publicly available data. No proprietary databases.", by: "Admin", byId: null, role: "admin", ts: BASE - 1700000 }] },
+    { q: "Is there Wi-Fi at the venue?", by: "Student 40", byId: null, tm: 5, ts: BASE - 600000, category: "logistics", replies: [] },
   ];
 }
 
