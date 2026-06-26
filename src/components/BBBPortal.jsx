@@ -369,6 +369,10 @@ export default function BBBPortal(){
     fetch(`/api/qna/${id}/replies/${rid}`,{method:"DELETE"}),
     "Reply deleted","Couldn't delete reply"
   ).then(ok=>ok&&reloadQna());
+  const delQuestion=(id)=>mutate(
+    fetch(`/api/qna/${id}`,{method:"DELETE"}),
+    "Question deleted","Couldn't delete question"
+  ).then(ok=>ok&&reloadQna());
   const addAnn=(title,body)=>mutate(
     fetch("/api/announcements",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title,body})}),
     "Announcement posted","Couldn't post announcement"
@@ -484,7 +488,7 @@ export default function BBBPortal(){
     checkin:<PgCheckin user={user} teams={teams} onChk={chk}/>,
     students:user.role===ROLES.ADMIN?<PgStudents teams={teams} actions={studentActions}/>:null,
     admin:user.role===ROLES.ADMIN?<PgAdmin api={adminApi}/>:null,
-    qna:<PgQna user={user} items={qna} onAsk={askQna} onReply={addReply} onEditReply={editReply} onDelReply={delReply}/>,
+    qna:<PgQna user={user} items={qna} onAsk={askQna} onReply={addReply} onEditReply={editReply} onDelReply={delReply} onDelQuestion={delQuestion}/>,
     announcements:<PgAnn user={user} items={ann} onAdd={addAnn} onPin={pinAnn} onEdit={editAnn} onDel={delAnn}/>,
   };
   return(
@@ -1010,7 +1014,7 @@ function PgCheckin({user,teams,onChk}){
   return <div style={{animation:"fadeUp 0.4s ease",padding:18,color:s.txt2}}>Check-in not available for your role.</div>;
 }
 
-function PgQna({user,items,onAsk,onReply,onEditReply,onDelReply}){
+function PgQna({user,items,onAsk,onReply,onEditReply,onDelReply,onDelQuestion}){
   const[q,setQ]=useState("");const[qCat,setQCat]=useState("general");
   const[fil,setFil]=useState("all");const[catFil,setCatFil]=useState("all");
   const[selectedId,setSelectedId]=useState(null);
@@ -1058,7 +1062,10 @@ function PgQna({user,items,onAsk,onReply,onEditReply,onDelReply}){
                 {selected.category&&<MonoTag style={{color:s.txt2}}>{selected.category}</MonoTag>}
               </div>
             </div>
-            {!staffReplied(selected)&&<MonoTag style={{color:s.warn}}>Pending</MonoTag>}
+            <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+              {!staffReplied(selected)&&<MonoTag style={{color:s.warn}}>Pending</MonoTag>}
+              {user.role===ROLES.ADMIN&&<button onClick={()=>{if(confirm("Delete this entire question and its conversation? This cannot be undone.")){onDelQuestion(selected.id);setSelectedId(null);}}} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${s.border}`,background:"#fff",color:s.err,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Delete question</button>}
+            </div>
           </div>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:18}}>
