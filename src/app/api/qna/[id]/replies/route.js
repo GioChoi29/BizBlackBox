@@ -24,6 +24,10 @@ export async function POST(req, { params }) {
   const uid = user._id.toString();
   const isStaff = user.role !== "student";
   const isAuthor = (q.byId && String(q.byId) === uid) || q.by === user.name;
+  // A private question is only visible to its author and admins — so only they
+  // can reply. (Don't reveal a private post the requester shouldn't see.)
+  const canSee = user.role === "admin" || q.visibility !== "private" || isAuthor;
+  if (!canSee) return NextResponse.json({ error: "not found" }, { status: 404 });
   if (!isStaff && !isAuthor) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }

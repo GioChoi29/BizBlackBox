@@ -353,9 +353,13 @@ export default function BBBPortal(){
       return false;
     }
   };
-  const askQna=(q,cat)=>mutate(
-    fetch("/api/qna",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({q,category:cat||"general"})}),
+  const askQna=(payload)=>mutate(
+    fetch("/api/qna",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}),
     "Question posted","Couldn't post question"
+  ).then(ok=>ok&&reloadQna());
+  const patchQuestion=(id,fields)=>mutate(
+    fetch(`/api/qna/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(fields)}),
+    "Updated","Couldn't update"
   ).then(ok=>ok&&reloadQna());
   const addReply=(id,text)=>mutate(
     fetch(`/api/qna/${id}/replies`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})}),
@@ -488,7 +492,7 @@ export default function BBBPortal(){
     checkin:<PgCheckin user={user} teams={teams} onChk={chk}/>,
     students:user.role===ROLES.ADMIN?<PgStudents teams={teams} actions={studentActions}/>:null,
     admin:user.role===ROLES.ADMIN?<PgAdmin api={adminApi}/>:null,
-    qna:<PgQna user={user} items={qna} onAsk={askQna} onReply={addReply} onEditReply={editReply} onDelReply={delReply} onDelQuestion={delQuestion}/>,
+    qna:<PgQna user={user} items={qna} onAsk={askQna} onPatch={patchQuestion} onReply={addReply} onEditReply={editReply} onDelReply={delReply} onDelQuestion={delQuestion}/>,
     announcements:<PgAnn user={user} items={ann} onAdd={addAnn} onPin={pinAnn} onEdit={editAnn} onDel={delAnn}/>,
   };
   return(
@@ -1014,65 +1018,153 @@ function PgCheckin({user,teams,onChk}){
   return <div style={{animation:"fadeUp 0.4s ease",padding:18,color:s.txt2}}>Check-in not available for your role.</div>;
 }
 
-function PgQna({user,items,onAsk,onReply,onEditReply,onDelReply,onDelQuestion}){
-  const[q,setQ]=useState("");const[qCat,setQCat]=useState("general");
-  const[fil,setFil]=useState("all");const[catFil,setCatFil]=useState("all");
+function PgQna({user,items,onAsk,onPatch,onReply,onEditReply,onDelReply,onDelQuestion}){
   const[selectedId,setSelectedId]=useState(null);
+  const[fil,setFil]=useState("all");const[catFil,setCatFil]=useState("all");const[search,setSearch]=useState("");
   const[compose,setCompose]=useState("");
   const[editingId,setEditingId]=useState(null);const[editText,setEditText]=useState("");
-  // Per-device "unopened responses" tracking: questionId -> last-seen timestamp.
-  const[reads,setReads]=useState(()=>{
-    if(typeof window==="undefined")return{};
-    try{return JSON.parse(localStorage.getItem("bbb_qna_reads_v1")||"{}");}catch{return{};}
-  });
+  const[newOpen,setNewOpen]=useState(false);
+  const[nTitle,setNTitle]=useState("");const[nBody,setNBody]=useState("");const[nCat,setNCat]=useState("general");const[nVis,setNVis]=useState("public");
+  // Per-device "unopened responses" tracking.
+  const[reads,setReads]=useState(()=>{if(typeof window==="undefined")return{};try{return JSON.parse(localStorage.getItem("bbb_qna_reads_v1")||"{}");}catch{return{};}});
   useEffect(()=>{try{localStorage.setItem("bbb_qna_reads_v1",JSON.stringify(reads));}catch{}},[reads]);
+  // Two-pane on wide screens; single column (list <-> detail) on narrow.
+  const[wide,setWide]=useState(true);
+  useEffect(()=>{const m=window.matchMedia("(min-width: 1080px)");const f=()=>setWide(m.matches);f();m.addEventListener("change",f);return()=>m.removeEventListener("change",f);},[]);
 
   const uid=String(user.id||"");
+  const isAdmin=user.role===ROLES.ADMIN;
   const replies=(x)=>x.replies||[];
-  const staffReplied=(x)=>replies(x).some(r=>r.role&&r.role!=="student");
-  const mineReply=(r)=>user.role===ROLES.ADMIN||String(r.byId||"")===uid||r.by===user.name;
   const isAuthor=(x)=>String(x.byId||"")===uid||x.by===user.name;
   const canReplyTo=(x)=>user.role!==ROLES.STUDENT||isAuthor(x);
-  // A question is "unread" when its newest reply from someone *other than me* is
-  // more recent than the last time I opened it.
+  const canResolve=(x)=>isAdmin||isAuthor(x)||user.role!==ROLES.STUDENT;
+  const mineReply=(r)=>isAdmin||String(r.byId||"")===uid||r.by===user.name;
   const lastOtherTs=(x)=>replies(x).filter(r=>String(r.byId||"")!==uid&&r.by!==user.name).reduce((m,r)=>Math.max(m,r.ts||0),0);
   const isUnread=(x)=>lastOtherTs(x)>(reads[x.id]||0);
   const lastActivity=(x)=>Math.max(x.ts||0,...replies(x).map(r=>r.ts||0));
   const markRead=(id)=>setReads(p=>({...p,[id]:Date.now()}));
-  const open=(x)=>{markRead(x.id);setSelectedId(x.id);setCompose("");setEditingId(null);};
   const roleLabel=(role)=>role==="admin"?"Admin":role==="senior_mentor"?"Senior Mentor":role==="junior_mentor"?"Mentor":"Student";
-  const unanswered=items.filter(x=>!staffReplied(x)).length;
+  const open=(x)=>{markRead(x.id);setSelectedId(x.id);setCompose("");setEditingId(null);};
 
+  const unresolved=items.filter(x=>!x.resolved).length;
+  const cats=["logistics","rules","technical","general","other"];
+  const sq=search.trim().toLowerCase();
+  const list=items.filter(x=>{
+    const statusOk=fil==="all"||(fil==="unread"&&isUnread(x))||(fil==="unresolved"&&!x.resolved)||(fil==="mine"&&isAuthor(x));
+    const catOk=catFil==="all"||x.category===catFil;
+    const searchOk=!sq||(x.title||"").toLowerCase().includes(sq)||(x.body||"").toLowerCase().includes(sq);
+    return statusOk&&catOk&&searchOk;
+  }).sort((a,b)=>lastActivity(b)-lastActivity(a));
   const selected=selectedId?items.find(x=>x.id===selectedId):null;
 
-  // ---- Conversation / detail view ----
+  const submitNew=()=>{const t=nTitle.trim();if(!t)return;onAsk({title:t,body:nBody.trim(),category:nCat,visibility:nVis});setNTitle("");setNBody("");setNCat("general");setNVis("public");setNewOpen(false);};
+
+  const chipBtn={padding:"6px 12px",borderRadius:8,border:`1px solid ${s.border}`,background:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"};
+  const inputSt={width:"100%",boxSizing:"border-box",padding:"10px 12px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:10,color:s.txt,fontSize:13,fontFamily:"inherit"};
+
+  // ---------- New-post composer ----------
+  const composer=(
+    <div style={{borderRadius:16,padding:"18px 20px",background:"#fff",border:`1.5px solid ${s.accent}`,marginBottom:14}}>
+      <input value={nTitle} onChange={e=>setNTitle(e.target.value)} placeholder="Title — a short summary of your question" style={{...inputSt,fontWeight:600,marginBottom:8}}/>
+      <textarea value={nBody} onChange={e=>setNBody(e.target.value)} placeholder="Add details (optional)" rows={3} style={{...inputSt,resize:"vertical",lineHeight:1.5,marginBottom:8}}/>
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        <select value={nCat} onChange={e=>setNCat(e.target.value)} aria-label="Category" style={{...inputSt,width:"auto",cursor:"pointer",fontSize:12}}>
+          {cats.map(c=><option key={c} value={c}>{c[0].toUpperCase()+c.slice(1)}</option>)}
+        </select>
+        <div style={{display:"flex",gap:4,padding:3,borderRadius:9,background:"#f1f1f4"}}>
+          {[["public","Public"],["private","Private"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setNVis(v)} style={{padding:"6px 12px",borderRadius:7,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700,background:nVis===v?"#fff":"transparent",color:nVis===v?s.accent:s.txt2,boxShadow:nVis===v?"0 1px 2px rgba(0,0,0,0.08)":"none"}}>{l}</button>
+          ))}
+        </div>
+        <div style={{marginLeft:"auto",display:"flex",gap:8}}>
+          <button onClick={()=>{setNewOpen(false);setNTitle("");setNBody("");}} style={{...chipBtn,padding:"9px 16px",color:s.txt2}}>Cancel</button>
+          <button onClick={submitNew} disabled={!nTitle.trim()} style={{padding:"9px 18px",borderRadius:100,border:"none",background:nTitle.trim()?s.accent:"#e2e3eb",color:"#fff",fontSize:13,fontWeight:700,cursor:nTitle.trim()?"pointer":"not-allowed",fontFamily:"inherit",opacity:nTitle.trim()?1:0.7}}>Post question</button>
+        </div>
+      </div>
+      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:s.txtM,letterSpacing:"0.06em",marginTop:8}}>{nVis==="private"?"Private — only you and admins can see this.":"Public — visible to everyone."}</div>
+    </div>
+  );
+
+  // ---------- List pane ----------
+  const listPane=(
+    <div>
+      {newOpen?composer:<button onClick={()=>setNewOpen(true)} style={{width:"100%",padding:"12px 16px",borderRadius:12,border:"none",background:s.accent,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><I.Send/>New post</button>}
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search questions…" style={{...inputSt,marginBottom:10}}/>
+      <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
+        {[{id:"all",l:"All"},{id:"unread",l:"Unread"},{id:"unresolved",l:`Unresolved (${unresolved})`},{id:"mine",l:"Mine"}].map(f=>(
+          <Pill key={f.id} active={fil===f.id} onClick={()=>setFil(f.id)} style={{padding:"6px 12px",fontSize:12}}>{f.l}</Pill>
+        ))}
+      </div>
+      <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
+        {["all",...cats].map(c=>(
+          <Pill key={c} active={catFil===c} onClick={()=>setCatFil(c)} style={{padding:"5px 11px",fontSize:11}}>{c==="all"?"All":c[0].toUpperCase()+c.slice(1)}</Pill>
+        ))}
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {list.map(x=>{
+          const unread=isUnread(x);const active=selectedId===x.id&&wide;const rc=replies(x).length;
+          return(
+            <button key={x.id} onClick={()=>open(x)} style={{textAlign:"left",width:"100%",borderRadius:14,padding:"14px 16px",background:active?"#efedfb":"#fafafb",border:`1px solid ${active?s.accent:unread?"#e0dbf8":"#ececef"}`,cursor:"pointer",fontFamily:"inherit",transition:"background 0.12s"}}>
+              <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13.5,fontWeight:700,color:"#0d0f16",lineHeight:1.4,display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis"}}>{x.title}</span>
+                    {unread&&<span title="New replies" style={{width:8,height:8,borderRadius:"50%",background:s.accent,flexShrink:0}}/>}
+                  </div>
+                  <div style={{fontSize:10.5,color:s.txt2,marginTop:5,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace"}}>{x.by} · {relTime(x.ts)}</span>
+                    {x.visibility==="private"&&<MonoTag style={{color:s.warn}}>Private</MonoTag>}
+                  </div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,flexWrap:"wrap"}}>
+                {x.category&&<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",color:s.accent,background:"#efedfb",padding:"2px 7px",borderRadius:6}}>{x.category}</span>}
+                <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9.5,fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",color:x.resolved?s.ok:s.warn}}>{x.resolved?"Resolved":"Unresolved"}</span>
+                <span style={{marginLeft:"auto",fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:s.txtM}}>{rc} {rc===1?"reply":"replies"}</span>
+              </div>
+            </button>
+          );
+        })}
+        {list.length===0&&items.length===0&&<EmptyState icon={<I.Msg/>} title="No questions yet" msg="Start the discussion with New post."/>}
+        {list.length===0&&items.length>0&&<EmptyState title="Nothing matches" msg="Try clearing your filters or search."/>}
+      </div>
+    </div>
+  );
+
+  // ---------- Detail / thread pane ----------
+  let detailPane;
   if(selected){
     const thread=replies(selected).slice().sort((a,b)=>(a.ts||0)-(b.ts||0));
     const send=()=>{const t=compose.trim();if(!t)return;onReply(selected.id,t);setCompose("");markRead(selected.id);};
-    return(
-      <div style={{animation:"fadeUp 0.4s ease"}}>
-        <button onClick={()=>setSelectedId(null)} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 16px",borderRadius:100,border:`1px solid ${s.border}`,background:"#fff",color:s.txt2,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:24}}>← All questions</button>
+    detailPane=(
+      <div>
+        {!wide&&<button onClick={()=>setSelectedId(null)} style={{...chipBtn,padding:"9px 16px",borderRadius:100,color:s.txt2,marginBottom:16}}>← All questions</button>}
         <div style={{borderRadius:18,padding:"22px 24px",background:"#fafafb",border:"1px solid #ececef",marginBottom:18}}>
-          <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
-            <div style={{width:28,height:28,borderRadius:8,background:"#efedfb",color:s.accent,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,flexShrink:0}}>Q</div>
-            <div style={{flex:1}}>
-              <div style={{fontSize:16,fontWeight:700,color:"#0d0f16",lineHeight:1.5}}>{selected.q}</div>
+          <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <span style={{fontSize:18,fontWeight:800,color:"#0d0f16",letterSpacing:"-0.01em"}}>{selected.title}</span>
+                {selected.visibility==="private"&&<MonoTag style={{color:s.warn}}>Private</MonoTag>}
+              </div>
               <div style={{fontSize:11,color:s.txt2,marginTop:6,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10}}>{selected.by}{selected.tm?` · Team ${selected.tm}`:""} · {relTime(selected.ts)}</span>
                 {selected.category&&<MonoTag style={{color:s.txt2}}>{selected.category}</MonoTag>}
               </div>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-              {!staffReplied(selected)&&<MonoTag style={{color:s.warn}}>Pending</MonoTag>}
-              {user.role===ROLES.ADMIN&&<button onClick={()=>{if(confirm("Delete this entire question and its conversation? This cannot be undone.")){onDelQuestion(selected.id);setSelectedId(null);}}} style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${s.border}`,background:"#fff",color:s.err,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Delete question</button>}
-            </div>
+          </div>
+          {selected.body&&<div style={{fontSize:14,color:s.txt,lineHeight:1.65,marginTop:14,whiteSpace:"pre-wrap"}}>{selected.body}</div>}
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:16,flexWrap:"wrap"}}>
+            {canResolve(selected)
+              ?<button onClick={()=>onPatch(selected.id,{resolved:!selected.resolved})} style={{...chipBtn,color:selected.resolved?s.ok:s.txt,borderColor:selected.resolved?s.ok:s.border}}>{selected.resolved?"✓ Resolved — reopen":"Mark resolved"}</button>
+              :<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",color:selected.resolved?s.ok:s.warn}}>{selected.resolved?"Resolved":"Unresolved"}</span>}
+            {isAdmin&&<button onClick={()=>onPatch(selected.id,{visibility:selected.visibility==="private"?"public":"private"})} style={chipBtn}>{selected.visibility==="private"?"Make public":"Make private"}</button>}
+            {isAdmin&&<button onClick={()=>{if(confirm("Delete this entire question and its conversation? This cannot be undone.")){onDelQuestion(selected.id);setSelectedId(null);}}} style={{...chipBtn,color:s.err}}>Delete</button>}
           </div>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:18}}>
           {thread.length===0&&<div style={{padding:"16px 18px",borderRadius:12,background:"#fafafb",border:"1px dashed #e0dbf8",color:s.txt2,fontSize:13}}>No replies yet.{canReplyTo(selected)?" Start the conversation below.":""}</div>}
           {thread.map(r=>{
-            const isStaff=r.role&&r.role!=="student";
-            const editing=editingId===r.id;
+            const isStaff=r.role&&r.role!=="student";const editing=editingId===r.id;
             return(
               <div key={r.id} style={{padding:"14px 16px",borderRadius:12,background:isStaff?"#fff":"#fafafb",border:`1px solid ${isStaff?"#e0dbf8":"#ececef"}`,position:"relative"}}>
                 <div style={{position:"absolute",left:0,top:10,bottom:10,width:3,borderRadius:2,background:isStaff?s.accent:s.txtM}}/>
@@ -1091,15 +1183,13 @@ function PgQna({user,items,onAsk,onReply,onEditReply,onDelReply,onDelQuestion}){
                 </div>
                 {editing?
                   <div style={{marginLeft:10}}>
-                    <textarea value={editText} onChange={e=>setEditText(e.target.value)} rows={2} style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",background:"#fff",border:`1px solid ${s.accent}`,borderRadius:10,color:s.txt,fontSize:13,fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
+                    <textarea value={editText} onChange={e=>setEditText(e.target.value)} rows={2} style={{...inputSt,border:`1px solid ${s.accent}`,resize:"vertical",lineHeight:1.5}}/>
                     <div style={{display:"flex",gap:8,marginTop:8}}>
                       <button onClick={()=>{const t=editText.trim();if(t){onEditReply(selected.id,r.id,t);setEditingId(null);}}} style={{padding:"7px 16px",borderRadius:100,border:"none",background:s.accent,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Save</button>
                       <button onClick={()=>setEditingId(null)} style={{padding:"7px 14px",borderRadius:100,border:`1px solid ${s.border}`,background:"#fff",color:s.txt2,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
                     </div>
                   </div>
-                  :
-                  <div style={{fontSize:13,color:s.txt,lineHeight:1.6,marginLeft:10,whiteSpace:"pre-wrap"}}>{r.text}</div>
-                }
+                  :<div style={{fontSize:13,color:s.txt,lineHeight:1.6,marginLeft:10,whiteSpace:"pre-wrap"}}>{r.text}</div>}
               </div>
             );
           })}
@@ -1108,105 +1198,25 @@ function PgQna({user,items,onAsk,onReply,onEditReply,onDelReply,onDelQuestion}){
           <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
             <textarea value={compose} onChange={e=>setCompose(e.target.value)} placeholder="Write a reply — Enter to send, Shift+Enter for a new line" rows={2}
               onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}}
-              style={{flex:1,padding:"12px 14px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:13,fontFamily:"inherit",resize:"vertical",lineHeight:1.5,minHeight:46}}
-              onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
+              style={{...inputSt,resize:"vertical",lineHeight:1.5,minHeight:46}}/>
             <button onClick={send} disabled={!compose.trim()} style={{padding:"12px 20px",borderRadius:100,border:"none",background:compose.trim()?s.accent:"#e2e3eb",color:"#fff",cursor:compose.trim()?"pointer":"not-allowed",fontFamily:"inherit",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:6,opacity:compose.trim()?1:0.7}}><I.Send/>Reply</button>
           </div>
-          :
-          <div style={{padding:"12px 16px",borderRadius:12,background:"#fafafb",border:"1px solid #ececef",color:s.txt2,fontSize:12}}>Only staff and the person who asked can reply to this question.</div>
-        }
+          :<div style={{padding:"12px 16px",borderRadius:12,background:"#fafafb",border:"1px solid #ececef",color:s.txt2,fontSize:12}}>Only staff and the person who asked can reply to this question.</div>}
       </div>
     );
+  }else{
+    detailPane=<EmptyState icon={<I.Msg/>} title="Select a question" msg="Choose a question from the list to open the conversation."/>;
   }
-
-  // ---- List view (replies hidden until a question is opened) ----
-  const list=items.filter(x=>{
-    const stOk=fil==="all"||(fil==="pending"&&!staffReplied(x))||(fil==="answered"&&staffReplied(x));
-    const cOk=catFil==="all"||x.category===catFil;
-    return stOk&&cOk;
-  }).sort((a,b)=>lastActivity(b)-lastActivity(a));
 
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
-      <PageHeader eyebrow="Questions & Answers">Q&amp;A</PageHeader>
-
-      {unanswered>0&&(
-        <div style={{borderRadius:14,padding:"12px 18px",background:"#fafafb",border:"1.5px solid #e0dbf8",marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:3,height:36,background:s.accent,borderRadius:2,flexShrink:0}}/>
-          <div style={{fontSize:13,fontWeight:600,color:"#0d0f16"}}>{unanswered} question{unanswered>1?"s":""} awaiting an answer</div>
+      <PageHeader eyebrow="Questions & Answers">Q&amp;A Discussion</PageHeader>
+      {wide?
+        <div style={{display:"flex",gap:18,alignItems:"flex-start"}}>
+          <div style={{flex:"0 0 360px",minWidth:0}}>{listPane}</div>
+          <div style={{flex:1,minWidth:0}}>{detailPane}</div>
         </div>
-      )}
-
-      {/* Ask form */}
-      <div style={{borderRadius:18,padding:"22px 24px",background:"#fafafb",border:"1px solid #ececef",marginBottom:24}}>
-        <label htmlFor="qna-ask" style={{...srOnly}}>Ask a question</label>
-        <MonoTag style={{display:"block",marginBottom:14,color:s.txt2}}>Ask a Question</MonoTag>
-        <div style={{display:"flex",gap:8,marginBottom:8,alignItems:"flex-start"}}>
-          <textarea id="qna-ask" value={q} onChange={e=>setQ(e.target.value)} placeholder="Type your question — Cmd/Ctrl+Enter to submit" rows={2}
-            onKeyDown={e=>{if((e.metaKey||e.ctrlKey)&&e.key==="Enter"&&q.trim()){onAsk(q.trim(),qCat);setQ("");}}}
-            style={{flex:1,padding:"12px 14px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:13,fontFamily:"inherit",resize:"vertical",lineHeight:1.5,minHeight:46}}
-            onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
-          <select value={qCat} onChange={e=>setQCat(e.target.value)} aria-label="Question category" style={{padding:"12px 12px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>
-            {["logistics","rules","technical","general","other"].map(c=><option key={c} value={c}>{c[0].toUpperCase()+c.slice(1)}</option>)}
-          </select>
-          <button onClick={()=>{if(q.trim()){onAsk(q.trim(),qCat);setQ("")}}} disabled={!q.trim()}
-            style={{padding:"12px 20px",borderRadius:100,border:"none",background:q.trim()?s.accent:"#e2e3eb",color:"#fff",cursor:q.trim()?"pointer":"not-allowed",fontFamily:"inherit",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:6,opacity:q.trim()?1:0.7}}>
-            <I.Send/>Ask
-          </button>
-        </div>
-        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:s.txtM,letterSpacing:"0.1em"}}>All Q&amp;A visible to every participant</div>
-      </div>
-
-      {/* Filters */}
-      <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
-        {[{id:"all",l:"All"},{id:"pending",l:`Pending (${unanswered})`},{id:"answered",l:"Answered"}].map(f=>(
-          <Pill key={f.id} active={fil===f.id} onClick={()=>setFil(f.id)} style={{padding:"6px 14px",fontSize:12}}>{f.l}</Pill>
-        ))}
-      </div>
-      <div style={{display:"flex",gap:6,marginBottom:20,flexWrap:"wrap"}}>
-        {["all","logistics","rules","technical","general","other"].map(c=>(
-          <Pill key={c} active={catFil===c} onClick={()=>setCatFil(c)} style={{padding:"5px 12px",fontSize:11}}>
-            {c==="all"?"All":c[0].toUpperCase()+c.slice(1)}
-          </Pill>
-        ))}
-      </div>
-
-      {/* Q&A list — click a question to open its conversation */}
-      <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        {list.map(x=>{
-          const unread=isUnread(x);
-          const rc=replies(x).length;
-          const answered=staffReplied(x);
-          return(
-            <button key={x.id} onClick={()=>open(x)} style={{textAlign:"left",width:"100%",borderRadius:18,padding:"18px 22px",background:"#fafafb",border:`1px solid ${unread?s.accent:answered?"#ececef":"#e0dbf8"}`,position:"relative",cursor:"pointer",fontFamily:"inherit",transition:"transform 0.16s"}}
-              onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
-              onMouseLeave={e=>e.currentTarget.style.transform=""}>
-              {!answered&&<div style={{position:"absolute",left:0,top:18,bottom:18,width:3,borderRadius:3,background:s.accent}}/>}
-              <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
-                <div style={{width:28,height:28,borderRadius:8,background:"#efedfb",color:s.accent,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,flexShrink:0}}>Q</div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:14,fontWeight:600,color:"#0d0f16",lineHeight:1.5,display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{flex:1}}>{x.q}</span>
-                    {unread&&<span title="New replies" style={{width:9,height:9,borderRadius:"50%",background:s.accent,flexShrink:0,boxShadow:"0 0 0 3px #efedfb"}}/>}
-                  </div>
-                  <div style={{fontSize:11,color:s.txt2,marginTop:6,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10}}>{x.by}{x.tm?` · Team ${x.tm}`:""} · {relTime(x.ts)}</span>
-                    {x.category&&<MonoTag style={{color:s.txt2}}>{x.category}</MonoTag>}
-                    <MonoTag style={{color:s.txt2}}>{rc} {rc===1?"reply":"replies"}</MonoTag>
-                  </div>
-                </div>
-                {answered?<MonoTag style={{color:s.ok}}>Answered</MonoTag>:<MonoTag style={{color:s.warn}}>Pending</MonoTag>}
-              </div>
-            </button>
-          );
-        })}
-        {list.length===0&&items.length===0&&(
-          <EmptyState icon={<I.Msg/>} title="No questions yet" msg="Be the first to ask — Q&A is visible to everyone."/>
-        )}
-        {list.length===0&&items.length>0&&(
-          <EmptyState title="Nothing matches your filters" msg="Try clearing them above."/>
-        )}
-      </div>
+        :(selected?detailPane:listPane)}
     </div>
   );
 }

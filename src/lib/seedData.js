@@ -91,11 +91,11 @@ export function buildQna() {
   // Each question carries a `replies` thread; questions and replies record the
   // author's user id (null in seed data) so follow-ups and edit rights resolve.
   return [
-    { q: "What should we bring for the overnight stay?", by: "Student 3", byId: null, tm: 1, ts: BASE - 3600000, category: "logistics",
+    { title: "What should we bring for the overnight stay?", body: "", by: "Student 3", byId: null, tm: 1, ts: BASE - 3600000, category: "logistics", visibility: "public", resolved: true,
       replies: [{ id: "seed-r1", text: "Bring toiletries, a change of clothes, laptop + charger. Bedding is provided.", by: "Admin", byId: null, role: "admin", ts: BASE - 3500000 }] },
-    { q: "Can we use external data sources?", by: "Student 15", byId: null, tm: 2, ts: BASE - 1800000, category: "rules",
+    { title: "Can we use external data sources?", body: "Wondering if we're allowed to pull in public datasets for the project.", by: "Student 15", byId: null, tm: 2, ts: BASE - 1800000, category: "rules", visibility: "public", resolved: true,
       replies: [{ id: "seed-r2", text: "Yes, any publicly available data. No proprietary databases.", by: "Admin", byId: null, role: "admin", ts: BASE - 1700000 }] },
-    { q: "Is there Wi-Fi at the venue?", by: "Student 40", byId: null, tm: 5, ts: BASE - 600000, category: "logistics", replies: [] },
+    { title: "Is there Wi-Fi at the venue?", body: "", by: "Student 40", byId: null, tm: 5, ts: BASE - 600000, category: "logistics", visibility: "public", resolved: false, replies: [] },
   ];
 }
 
