@@ -451,6 +451,7 @@ export default function BBBPortal(){
       const res=await fetch(`/api/users/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)}).catch(()=>null);
       if(!res||!res.ok){toast.error("Couldn't update — reverted");reloadUsers();return false;}
       reloadMentors(); // a name/phone/email/role change may affect Contacts
+      if("name" in form)reloadTeams(); // server syncs the linked roster name
       return true;
     },
     // Mirror the server cascade: drop the user AND any roster entry linked to it.
@@ -486,7 +487,7 @@ export default function BBBPortal(){
   const pages={
     home:<PgHome user={user} teams={teams} ann={ann} setTab={setTab}/>,
     schedule:<PgSchedule user={user} teams={teams} sched={sched} prelimList={prelimList}/>,
-    teams:<PgTeams user={user} teams={teams}/>,
+    teams:<PgTeams user={user} teams={teams} mentors={mentors}/>,
     transport:<PgTransport transport={transport}/>,
     venue:<PgVenue venueList={venueList}/>,
     rooms:<PgRooms user={user} teams={teams} users={users}/>,
@@ -710,10 +711,14 @@ function PgSchedule({user,teams,sched=[],prelimList=[]}){
   );
 }
 
-function PgTeams({user,teams}){
+function PgTeams({user,teams,mentors=[]}){
   const[srch,setSrch]=useState("");const[exp,setExp]=useState(user.team||null);
+  // Mentor name comes from the actual JM user account (kept current), not the
+  // team's stored copy.
+  const jmByTeam=Object.fromEntries(mentors.filter(m=>m.role==="junior_mentor").map(m=>[m.teamId,m.name]));
+  const jmName=(tm)=>jmByTeam[tm.id]||"Unassigned";
   // Only show teams that actually have members.
-  const filt=teams.filter(tm=>(tm.students||[]).length>0).filter(tm=>tm.name.toLowerCase().includes(srch.toLowerCase())||tm.jm.toLowerCase().includes(srch.toLowerCase()));
+  const filt=teams.filter(tm=>(tm.students||[]).length>0).filter(tm=>tm.name.toLowerCase().includes(srch.toLowerCase())||jmName(tm).toLowerCase().includes(srch.toLowerCase()));
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
       <PageHeader eyebrow="Participants">Teams &amp; Mentors</PageHeader>
@@ -725,7 +730,7 @@ function PgTeams({user,teams}){
               <div style={{width:32,height:32,borderRadius:8,background:mine?"#efedfb":"#f1f1f4",color:mine?s.accent:s.txt2,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,flexShrink:0}}>{tm.id}</div>
               <div style={{flex:1}}>
                 <div style={{fontSize:14,fontWeight:700,color:"#0d0f16"}}>{tm.name}</div>
-                <div style={{fontSize:12,color:s.txt2,marginTop:2}}>Mentor: {tm.jm} · <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{tm.workRoom}</span></div>
+                <div style={{fontSize:12,color:s.txt2,marginTop:2}}>Mentor: {jmName(tm)} · <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>{tm.workRoom}</span></div>
               </div>
               {mine&&<MonoTag>My Team</MonoTag>}
               <span style={{transform:open?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.2s",color:s.txtM}}><I.Rt/></span>

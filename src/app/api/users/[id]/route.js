@@ -56,6 +56,15 @@ export async function PATCH(req, { params }) {
     }
     throw e;
   }
+  // Keep the linked roster entry's display name in sync so the Students tab
+  // (and check-in, teams, etc.) always show the student's real name.
+  if (update.name !== undefined) {
+    await db.collection("teams").updateMany(
+      { "students.userId": id },
+      { $set: { "students.$[s].name": update.name } },
+      { arrayFilters: [{ "s.userId": id }] }
+    );
+  }
   return NextResponse.json({ ok: true });
 }
 
