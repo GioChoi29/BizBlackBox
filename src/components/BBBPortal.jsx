@@ -860,7 +860,7 @@ function PgRooms({user,teams,users=[]}){
       const tName=u.teamId!=null?(teams.find(t=>t.id===u.teamId)?.name||`Team ${u.teamId}`):"Staff";
       push(u.room,{name:u.name,team:tName,isMentor:true});
     });
-    const sorted=Object.entries(byRoom).sort((a,b)=>a[0].localeCompare(b[0]));
+    const sorted=Object.entries(byRoom).sort((a,b)=>roomNum(a[0])-roomNum(b[0])||a[0].localeCompare(b[0]));
     const srchLow=roomSrch.toLowerCase();
     const filtSorted=roomSrch.trim()?sorted.filter(([,ppl])=>ppl.some(p=>p.name.toLowerCase().includes(srchLow))):sorted;
     return(
@@ -1570,12 +1570,14 @@ function AdminUsersTable({section}){
   const[adding,setAdding]=useState(false);
   const[creds,setCreds]=useState(null);
   const[query,setQuery]=useState("");
+  const[roleTab,setRoleTab]=useState("student");
 
   const submitAdd=async(form)=>{
     const data=await actions.add(form);
     if(!data)return;
     setCreds({username:data.username,password:data.initialPassword,email:data.email,emailSent:data.emailSent,emailError:data.emailError});
     setAdding(false);
+    if(data.role)setRoleTab(data.role); // jump to the new user's group
   };
   const submitEdit=async(id,form)=>{
     setEditingId(null); // optimistic — close the editor immediately
@@ -1600,11 +1602,20 @@ function AdminUsersTable({section}){
     return out;
   };
   const q=query.trim().toLowerCase();
-  const filtered=q?items.filter(u=>(u.name||"").toLowerCase().includes(q)||(u.username||"").toLowerCase().includes(q)):items;
+  const roleTabs=[{v:"student",l:"Students"},{v:"junior_mentor",l:"Junior Mentors"},{v:"senior_mentor",l:"Senior Mentors"},{v:"admin",l:"Admins"}];
+  const countByRole=(r)=>(items||[]).filter(u=>u.role===r).length;
+  // Scope to the selected role group, then search, then sort alphabetically by name.
+  const filtered=(items||[])
+    .filter(u=>u.role===roleTab)
+    .filter(u=>!q||(u.name||"").toLowerCase().includes(q)||(u.username||"").toLowerCase().includes(q))
+    .sort((a,b)=>(a.name||"").localeCompare(b.name||""));
 
   return(
     <div>
       {creds&&<PasswordRevealModal creds={creds} onClose={()=>setCreds(null)}/>}
+      <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+        {roleTabs.map(rt=><Pill key={rt.v} active={roleTab===rt.v} onClick={()=>{setRoleTab(rt.v);setEditingId(null);}} style={{padding:"6px 12px",fontSize:12}}>{rt.l} ({countByRole(rt.v)})</Pill>)}
+      </div>
       <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by name or username…" style={{...adminInputSt,marginBottom:12}}/>
       {!adding&&<button onClick={()=>setAdding(true)} style={{...adminBtnSt,background:s.accent,color:"#fff",marginBottom:12}}>+ Add User</button>}
       {adding&&<AdminRowEditor fields={addFields} onSave={submitAdd} onCancel={()=>setAdding(false)}/>}
@@ -1629,6 +1640,11 @@ function AdminUsersTable({section}){
   );
 }
 
+// A bare room number is normalized to "Room N"; anything else passes through.
+const normalizeRoom=(v)=>{const t=String(v||"").trim();if(!t)return"";return /^\d+$/.test(t)?`Room ${t}`:t;};
+// Numeric value of a room for sorting ("Room 308" -> 308; blank sorts last).
+const roomNum=(v)=>{const m=String(v||"").match(/\d+/);return m?parseInt(m[0]):Infinity;};
+
 // Room assignment for everyone in one place. Students write to their roster
 // entry, mentors to their user record — same sources the Students tab and
 // Rooms page read, so a change here shows up everywhere.
@@ -1645,7 +1661,8 @@ function AdminRoomsTable({section}){
     save:(patch)=>updateUser(u.id,patch),
   }));
   const q=query.trim().toLowerCase();
-  const filtered=q?rows.filter(r=>r.name.toLowerCase().includes(q)||r.sub.toLowerCase().includes(q)):rows;
+  const filtered=(q?rows.filter(r=>r.name.toLowerCase().includes(q)||r.sub.toLowerCase().includes(q)):rows)
+    .slice().sort((a,b)=>roomNum(a.room)-roomNum(b.room)||a.name.localeCompare(b.name));
   return(
     <div>
       <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by name…" style={{...adminInputSt,marginBottom:12}}/>
@@ -1669,7 +1686,7 @@ function RoomAssignRow({row}){
         <div style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.name}</div>
         <div style={{fontSize:11,color:s.txt2}}>{row.sub}</div>
       </div>
-      <input value={room} onChange={e=>setRoom(e.target.value)} onBlur={()=>{if(room!==row.room)row.save({room});}} placeholder="—" style={adminInputSt}/>
+      <input value={room} onChange={e=>setRoom(e.target.value)} onBlur={()=>{const v=normalizeRoom(room);if(v!==row.room){setRoom(v);row.save({room:v});}}} placeholder="e.g. 308" style={adminInputSt}/>
       <select value={floor} onChange={e=>{setFloor(e.target.value);row.save({floor:e.target.value});}} style={adminInputSt}>
         <option value="">—</option><option value="1F">1F</option><option value="2F">2F</option><option value="3F">3F</option>
       </select>
