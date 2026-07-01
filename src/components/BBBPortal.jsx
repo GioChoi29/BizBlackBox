@@ -559,11 +559,13 @@ export default function BBBPortal(){
 
 function PgHome({user,teams,ann,setTab}){
   const myTm=user.team?teams.find(x=>x.id===user.team):null;
-  const tot=teams.reduce((a,x)=>a+x.students.length,0);
-  const chkd=teams.reduce((a,x)=>a+x.students.filter(st=>st.checkedIn).length,0);
+  // Count only teams that have members, matching the Teams tab.
+  const liveTeams=teams.filter(x=>(x.students||[]).length>0);
+  const tot=liveTeams.reduce((a,x)=>a+x.students.length,0);
+  const chkd=liveTeams.reduce((a,x)=>a+x.students.filter(st=>st.checkedIn).length,0);
   const isAd=user.role===ROLES.ADMIN;
   const statCards=[
-    {l:"Teams",v:String(teams.length),accent:false},
+    {l:"Teams",v:String(liveTeams.length),accent:false},
     {l:"Participants",v:String(tot),accent:false},
     ...(isAd?[{l:"Checked In",v:`${chkd}/${tot}`,accent:true}]:[]),
     ...(myTm?[{l:"Team Check-in",v:`${myTm.students.filter(st=>st.checkedIn).length}/${myTm.students.length}`,accent:true}]:[]),
