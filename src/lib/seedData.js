@@ -158,6 +158,14 @@ export function buildPrelim() {
   ];
 }
 
+export function buildConfig() {
+  return {
+    _id: "config",
+    // Submission deadline in KST. Editable from Admin Console → Deadline.
+    deadline: "2026-08-02T10:00:00+09:00",
+  };
+}
+
 export function buildTransport() {
   return {
     _id: "transport",

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { requireActiveUser, requireAdmin } from "@/lib/auth";
+import { bumpVersion } from "@/lib/version";
 
 export async function GET() {
   const { error } = await requireActiveUser();
@@ -27,5 +28,6 @@ export async function POST(req) {
     pinned: false,
   };
   const result = await db.collection("announcements").insertOne(doc);
+  await bumpVersion("announcements");
   return NextResponse.json({ ...doc, id: result.insertedId.toString() });
 }

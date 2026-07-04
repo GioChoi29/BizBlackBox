@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { requireActiveUser, isStaff } from "@/lib/auth";
+import { bumpVersion } from "@/lib/version";
 
 export async function GET() {
   const { error } = await requireActiveUser();
@@ -34,5 +35,6 @@ export async function PATCH(req) {
     { $set: { submitted: !!body.submitted, by: user.name, ts: Date.now() } },
     { upsert: true }
   );
+  await bumpVersion("submissions");
   return NextResponse.json({ ok: true });
 }

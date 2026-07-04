@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { requireActiveUser, isStaff } from "@/lib/auth";
+import { bumpVersion } from "@/lib/version";
 
 // Only event staff (admin / SM) or the JM of this specific team can mark
 // students checked-in. Students never check themselves in.
@@ -33,5 +34,6 @@ export async function PATCH(req, { params }) {
   if (result.matchedCount === 0) {
     return NextResponse.json({ error: "team or student not found" }, { status: 404 });
   }
+  await bumpVersion("teams");
   return NextResponse.json({ ok: true });
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { requireAdmin, safeObjectId } from "@/lib/auth";
+import { bumpVersion } from "@/lib/version";
 
 export async function PATCH(req, { params }) {
   const { error } = await requireAdmin();
@@ -22,6 +23,7 @@ export async function PATCH(req, { params }) {
       [{ $set: { pinned: { $not: ["$pinned"] } } }]
     );
     if (result.matchedCount === 0) return NextResponse.json({ error: "not found" }, { status: 404 });
+    await bumpVersion("announcements");
     return NextResponse.json({ ok: true });
   }
 
@@ -33,6 +35,7 @@ export async function PATCH(req, { params }) {
   }
   const result = await db.collection("announcements").updateOne({ _id }, { $set: update });
   if (result.matchedCount === 0) return NextResponse.json({ error: "not found" }, { status: 404 });
+  await bumpVersion("announcements");
   return NextResponse.json({ ok: true });
 }
 
@@ -45,5 +48,6 @@ export async function DELETE(_req, { params }) {
   const db = await getDb();
   const result = await db.collection("announcements").deleteOne({ _id });
   if (result.deletedCount === 0) return NextResponse.json({ error: "not found" }, { status: 404 });
+  await bumpVersion("announcements");
   return NextResponse.json({ ok: true });
 }

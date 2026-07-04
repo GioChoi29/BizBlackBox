@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { requireActiveUser, safeObjectId } from "@/lib/auth";
+import { bumpVersion } from "@/lib/version";
 
 // A reply can be edited or deleted by its own author or by an admin.
 function canModify(reply, user) {
@@ -54,6 +55,7 @@ export async function PATCH(req, { params }) {
     { _id: oid, "replies.id": replyId },
     { $set: { "replies.$.text": text.trim(), "replies.$.editedTs": Date.now() } }
   );
+  await bumpVersion("qna");
   return NextResponse.json({ ok: true });
 }
 
@@ -73,5 +75,6 @@ export async function DELETE(_req, { params }) {
   }
 
   await db.collection("qna").updateOne({ _id: oid }, { $pull: { replies: { id: replyId } } });
+  await bumpVersion("qna");
   return NextResponse.json({ ok: true });
 }

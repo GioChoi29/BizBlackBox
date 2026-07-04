@@ -8,6 +8,7 @@ import {
   ROLES,
 } from "@/lib/auth";
 import { sendCredentialsEmail } from "@/lib/email";
+import { bumpVersion } from "@/lib/version";
 
 export async function GET() {
   const { error } = await requireAdmin();
@@ -111,6 +112,8 @@ export async function POST(req) {
     );
     studentLinked = tr.matchedCount > 0;
   }
+
+  await bumpVersion(...(studentLinked ? ["users", "teams"] : ["users"]));
 
   // Best-effort credentials email; we still return the temp password so admin can share manually.
   const emailResult = await sendCredentialsEmail({

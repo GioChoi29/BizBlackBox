@@ -5,6 +5,7 @@ import {
   requireAdmin,
   safeObjectId,
 } from "./auth";
+import { bumpVersion } from "./version";
 
 function withId(doc) {
   return { ...doc, id: doc._id?.toString?.() ?? doc._id };
@@ -41,6 +42,7 @@ export function listAndCreate(collectionName, sort = {}, opts = {}) {
       delete body._id;
       const db = await getDb();
       const result = await db.collection(collectionName).insertOne(body);
+      await bumpVersion(collectionName);
       return NextResponse.json(withId({ ...body, _id: result.insertedId }));
     },
   };
@@ -66,6 +68,7 @@ export function updateAndDelete(collectionName, opts = {}) {
       if (result.matchedCount === 0) {
         return NextResponse.json({ error: "not found" }, { status: 404 });
       }
+      await bumpVersion(collectionName);
       return NextResponse.json({ ok: true });
     },
     DELETE: async (_req, { params }) => {
@@ -79,6 +82,7 @@ export function updateAndDelete(collectionName, opts = {}) {
       if (result.deletedCount === 0) {
         return NextResponse.json({ error: "not found" }, { status: 404 });
       }
+      await bumpVersion(collectionName);
       return NextResponse.json({ ok: true });
     },
   };

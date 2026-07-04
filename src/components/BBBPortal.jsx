@@ -8,7 +8,10 @@ import { useState, useEffect, useRef } from "react";
 const ROLES = { STUDENT:"student", JM:"junior_mentor", SM:"senior_mentor", ADMIN:"admin" };
 const RL = { [ROLES.STUDENT]:"Student", [ROLES.JM]:"Junior Mentor", [ROLES.SM]:"Senior Mentor", [ROLES.ADMIN]:"Admin" };
 const RC = { [ROLES.STUDENT]:"#4F6BF6", [ROLES.JM]:"#7C5CDB", [ROLES.SM]:"#D97706", [ROLES.ADMIN]:"#E04555" };
-const DL = new Date("2026-08-02T10:00:00+09:00");
+// Default submission deadline (KST) — used until the config doc loads.
+// Admins edit the live value from Admin Console → Deadline.
+const DL_ISO = "2026-08-02T10:00:00+09:00";
+const DL = new Date(DL_ISO);
 const TN = ["Alpha","Beta","Gamma","Delta","Epsilon","Zeta","Eta","Theta","Iota","Kappa","Lambda","Mu","Nu","Xi","Omicron","Pi","Rho","Sigma","Tau","Upsilon"];
 
 const s = {
@@ -169,8 +172,11 @@ function EmptyState({icon,title,msg}){
 // captions, etc.). Apply via `style={srOnly}`.
 const srOnly={position:"absolute",width:1,height:1,padding:0,margin:-1,overflow:"hidden",clip:"rect(0,0,0,0)",whiteSpace:"nowrap",border:0};
 
-function CountdownWidget(){
-  const left=useCountdown(DL);
+function CountdownWidget({deadline=DL}){
+  const left=useCountdown(deadline);
+  // Label derives from the (admin-editable) deadline, rendered in KST.
+  const dlDate=deadline.toLocaleDateString("en-US",{timeZone:"Asia/Seoul",month:"short",day:"numeric",year:"numeric"});
+  const dlTime=deadline.toLocaleTimeString("en-US",{timeZone:"Asia/Seoul",hour:"numeric",minute:"2-digit",hour12:true});
   if(!left) return(
     <div style={{borderRadius:18,padding:"28px 32px",background:"linear-gradient(135deg,#16181f,#20232e)",color:"#fff",position:"relative",overflow:"hidden"}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -188,7 +194,7 @@ function CountdownWidget(){
         <div style={{width:40,height:40,borderRadius:11,background:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,color:"#fff"}}><I.Timer style={{color:"#fff"}}/></div>
         <div>
           <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.18em",textTransform:"uppercase",fontWeight:500,color:"#fff"}}>Submission Deadline</div>
-          <div style={{fontSize:14,color:"#fff",opacity:0.55,marginTop:3}}>Aug 2, 2026 · 10:00 AM KST</div>
+          <div style={{fontSize:14,color:"#fff",opacity:0.55,marginTop:3}}>{dlDate} · {dlTime} KST</div>
         </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,position:"relative",zIndex:1}}>
@@ -217,6 +223,7 @@ export default function BBBPortal(){
   const[venueList,setVenueList]=useState([]);
   const[prelimList,setPrelimList]=useState([]);
   const[transport,setTransport]=useState(null);
+  const[config,setConfig]=useState(null);
   const[users,setUsers]=useState([]);
   const[moreOpen,setMoreOpen]=useState(false);
   const toast=useToasts();
@@ -253,7 +260,22 @@ export default function BBBPortal(){
     if(!r.ok){setTransport(null);return;}
     return r.json().then(setTransport);
   }).catch(()=>setTransport(null));
+  const reloadConfig=()=>fetch("/api/config").then(r=>{
+    if(r.status===401){bounceToLogin();return;}
+    if(!r.ok)return;
+    return r.json().then(d=>setConfig(d||{}));
+  }).catch(()=>{});
   const reloadUsers=()=>fetch("/api/users").then(safeArr(setUsers)).catch(()=>setUsers([]));
+  // Refresh our own record (team/room/name may have been changed by an admin).
+  // Only swaps state when something actually changed so the data-load effect
+  // (keyed on `user`) doesn't rerun for nothing.
+  const reloadMe=()=>fetch("/api/auth/me").then(async r=>{
+    if(r.status===401){bounceToLogin();return;}
+    if(!r.ok)return;
+    const u=await r.json();
+    if(u.mustChangePassword){window.location.href="/change-password";return;}
+    setUser(prev=>prev&&JSON.stringify(prev)===JSON.stringify(u)?prev:u);
+  }).catch(()=>{});
 
   useEffect(()=>{
     let cancelled=false;
@@ -267,30 +289,55 @@ export default function BBBPortal(){
     return()=>{cancelled=true;};
   },[]);
 
-  // Load everything once on login, then keep it fresh in the background so one
-  // user's change (a new Q&A question, a check-in, an edit) shows up on every
-  // other user's screen without a manual reload.
+  // Load everything once on login, then keep it fresh with a lightweight
+  // freshness poll: every 2.5s we fetch /api/version (one tiny doc of
+  // per-collection change counters) and refetch ONLY the collections whose
+  // counter moved. Any user's change — a check-in, a Q&A post, an admin edit
+  // to the schedule or rooms — lands on every other screen within seconds
+  // without hammering the API with full refetches.
+  const lastVersionsRef=useRef(null);
   useEffect(()=>{
     if(!user)return;
-    // Frequently-changing collections — polled on a short interval.
-    const refreshLive=()=>{
+    const refreshAll=()=>{
+      lastVersionsRef.current=null; // re-baseline; next poll won't double-fetch
       reloadTeams();reloadSubs();reloadQna();reloadAnn();reloadMentors();
+      reloadSched();reloadVenue();reloadPrelim();reloadTransport();reloadConfig();
       if(user.role===ROLES.ADMIN)reloadUsers();
     };
-    // Everything, including rarely-changing config — on first load and whenever
-    // the tab regains focus.
-    const refreshAll=()=>{
-      refreshLive();
-      reloadSched();reloadVenue();reloadPrelim();reloadTransport();
-    };
     refreshAll();
-    // Only poll while the tab is visible — no point hammering the API in the
-    // background, and we do a full refresh the moment the tab is focused again.
-    const id=setInterval(()=>{
+    // Which collections to refetch when a given version counter moves. The
+    // users collection also feeds /api/mentors (Contacts) and our own
+    // /api/auth/me record, so those refresh together.
+    const versionMap={
+      teams:reloadTeams,
+      submissions:reloadSubs,
+      qna:reloadQna,
+      announcements:reloadAnn,
+      users:()=>{if(user.role===ROLES.ADMIN)reloadUsers();reloadMentors();reloadMe();},
+      schedule:reloadSched,
+      venue:reloadVenue,
+      prelim:reloadPrelim,
+      transport:reloadTransport,
+      config:reloadConfig,
+    };
+    const pollVersions=async()=>{
+      // Only poll while the tab is visible; a full refresh runs on refocus.
       if(document.visibilityState!=="visible")return;
       if(Date.now()-recentMutationRef.current<4000)return; // let a just-made change settle
-      refreshLive();
-    },10000);
+      try{
+        const r=await fetch("/api/version",{cache:"no-store"});
+        if(r.status===401){bounceToLogin();return;}
+        if(!r.ok)return;
+        const v=(await r.json())||{};
+        const prev=lastVersionsRef.current;
+        lastVersionsRef.current=v;
+        if(!prev)return; // first poll after a full refresh — just record the baseline
+        Object.entries(versionMap).forEach(([k,reload])=>{
+          if((v[k]||0)!==(prev[k]||0))reload();
+        });
+      }catch{}
+    };
+    const id=setInterval(pollVersions,2500);
     const onVisible=()=>{if(document.visibilityState==="visible")refreshAll();};
     document.addEventListener("visibilitychange",onVisible);
     window.addEventListener("focus",onVisible);
@@ -390,6 +437,10 @@ export default function BBBPortal(){
   const crudEdit=(path,id,doc,reload)=>fetch(`${path}/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(doc)}).then(reload);
   const crudDel=(path,id,reload)=>fetch(`${path}/${id}`,{method:"DELETE"}).then(reload);
   const saveTransport=(doc)=>fetch("/api/transport",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(doc)}).then(reloadTransport);
+  const saveConfig=(doc)=>mutate(
+    fetch("/api/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(doc)}),
+    "Saved","Couldn't save"
+  ).then(ok=>ok&&reloadConfig());
 
   // Optimistic CRUD for students & users (admin). Each updates local React
   // state immediately so the UI feels instant, sends the write in the
@@ -473,6 +524,7 @@ export default function BBBPortal(){
     rooms:{teams,users,updateStudent:studentActions.update,updateUser:userActions.update},
     users:{items:users,actions:userActions,reload:reloadUsers},
     transport:{doc:transport,save:saveTransport},
+    config:{doc:config,save:saveConfig},
   };
 
   const nav=[
@@ -483,8 +535,12 @@ export default function BBBPortal(){
     ...(user.role===ROLES.ADMIN?[{id:"students",label:"Students",icon:I.Ppl},{id:"admin",label:"Admin Console",icon:I.Bell}]:[]),
     {id:"qna",label:"Q&A",icon:I.Msg},{id:"announcements",label:"Announce",icon:I.Bell},
   ];
+  // Deadline comes from the admin-editable config doc; fall back to the
+  // baked-in default until it loads (or if the stored value is malformed).
+  const dlParsed=config?.deadline?new Date(config.deadline):DL;
+  const deadline=isNaN(dlParsed.getTime())?DL:dlParsed;
   const pages={
-    home:<PgHome user={user} teams={teams} ann={ann} setTab={setTab}/>,
+    home:<PgHome user={user} teams={teams} ann={ann} mentors={mentors} deadline={deadline} setTab={setTab}/>,
     schedule:<PgSchedule user={user} teams={teams} sched={sched} prelimList={prelimList}/>,
     teams:<PgTeams user={user} teams={teams} mentors={mentors}/>,
     transport:<PgTransport transport={transport}/>,
@@ -557,8 +613,11 @@ export default function BBBPortal(){
 
 // ── Pages ────────────────────────────────────────────────────────────────────
 
-function PgHome({user,teams,ann,setTab}){
+function PgHome({user,teams,ann,mentors=[],deadline,setTab}){
   const myTm=user.team?teams.find(x=>x.id===user.team):null;
+  // Mentor comes from the live JM user account (same as the Teams page), not
+  // the stale copy stored on the team doc.
+  const myJm=myTm?mentors.find(m=>m.role==="junior_mentor"&&m.teamId===myTm.id):null;
   // Count only teams that have members, matching the Teams tab.
   const liveTeams=teams.filter(x=>(x.students||[]).length>0);
   const tot=liveTeams.reduce((a,x)=>a+x.students.length,0);
@@ -583,7 +642,7 @@ function PgHome({user,teams,ann,setTab}){
       </div>
 
       {/* Countdown */}
-      <div style={{marginBottom:26}}><CountdownWidget/></div>
+      <div style={{marginBottom:26}}><CountdownWidget deadline={deadline}/></div>
 
       {/* Stat cards */}
       <div style={{display:"grid",gridTemplateColumns:`repeat(${statCards.length},1fr)`,gap:16,marginBottom:42}}>
@@ -644,7 +703,7 @@ function PgHome({user,teams,ann,setTab}){
           <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.16em",textTransform:"uppercase",color:s.accent,fontWeight:500,marginBottom:14}}>My Team</div>
           <div style={{fontWeight:800,fontSize:22,letterSpacing:"-0.02em",marginBottom:16,color:"#0d0f16"}}>{myTm.name}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-            <div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.1em",textTransform:"uppercase",color:s.txt2,opacity:0.6,marginBottom:4}}>Junior Mentor</div><div style={{fontSize:14,fontWeight:600,color:s.txt}}>{myTm.jm}</div><div style={{fontSize:12,color:s.txt2,marginTop:2}}>{myTm.jmPhone}</div></div>
+            <div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.1em",textTransform:"uppercase",color:s.txt2,opacity:0.6,marginBottom:4}}>Junior Mentor</div><div style={{fontSize:14,fontWeight:600,color:s.txt}}>{myJm?.name||"Unassigned"}</div><div style={{fontSize:12,color:s.txt2,marginTop:2}}>{myJm?.phone||"—"}</div></div>
             <div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,letterSpacing:"0.1em",textTransform:"uppercase",color:s.txt2,opacity:0.6,marginBottom:4}}>Work Room</div><div style={{fontSize:14,fontWeight:600,color:s.txt}}>{myTm.workRoom}</div></div>
           </div>
         </div>
@@ -1536,6 +1595,32 @@ function AdminTransport({section}){
   );
 }
 
+// Submission-deadline editor. The value is entered and stored as KST wall
+// time ("YYYY-MM-DDTHH:mm:00+09:00" in the config doc), so admins anywhere
+// in the world edit the same clock the event runs on.
+function AdminDeadline({section}){
+  const{doc,save}=section;
+  const[val,setVal]=useState(null); // "YYYY-MM-DDTHH:mm"
+  useEffect(()=>{
+    if(doc&&val==null)setVal(String(doc.deadline||DL_ISO).slice(0,16));
+  },[doc]);
+  if(val==null)return <div style={{color:s.txt2}}>Loading…</div>;
+  const valid=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(val);
+  return(
+    <div>
+      <div style={{fontSize:10,fontWeight:700,color:s.txt2,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Submission Deadline (KST)</div>
+      <input type="datetime-local" value={val} onChange={e=>setVal(e.target.value)} style={{...adminInputSt,maxWidth:280,display:"block",marginBottom:10}}/>
+      <div style={{fontSize:12,color:s.txt2,marginBottom:16,lineHeight:1.5}}>
+        Drives the countdown on everyone's Home page. Entered as Korea time (KST).
+      </div>
+      <button disabled={!valid} onClick={()=>save({deadline:`${val}:00+09:00`})}
+        style={{...adminBtnSt,background:valid?s.accent:"#e2e3eb",color:"#fff",cursor:valid?"pointer":"not-allowed"}}>
+        Save Deadline
+      </button>
+    </div>
+  );
+}
+
 function PasswordRevealModal({creds,onClose}){
   const[copied,setCopied]=useState(false);
   const copy=async()=>{try{await navigator.clipboard.writeText(creds.password);setCopied(true);setTimeout(()=>setCopied(false),1500);}catch{}};
@@ -1780,6 +1865,7 @@ function PgAdmin({api}){
     rooms:{label:"Rooms"},
     users:{label:"Users"},
     transport:{label:"Transport (one doc)"},
+    deadline:{label:"Deadline"},
   };
   const[tab,setTab]=useState("sched");
   const current=sections[tab];
@@ -1793,6 +1879,8 @@ function PgAdmin({api}){
         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,color:s.accent,marginBottom:16}}>{current.label}</div>
         {tab==="transport"?
           <AdminTransport section={api.transport}/>:
+        tab==="deadline"?
+          <AdminDeadline section={api.config}/>:
         tab==="rooms"?
           <AdminRoomsTable section={api.rooms}/>:
         tab==="users"?

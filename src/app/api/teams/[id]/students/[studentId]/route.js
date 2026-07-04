@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/mongodb";
 import { requireAdmin } from "@/lib/auth";
+import { bumpVersion } from "@/lib/version";
 
 const ALLOWED_FIELDS = [
   "name",
@@ -51,6 +52,7 @@ export async function DELETE(_req, { params }) {
     } catch {}
   }
 
+  await bumpVersion(...(linkedUserId ? ["teams", "users"] : ["teams"]));
   return NextResponse.json({ ok: true });
 }
 
@@ -78,5 +80,6 @@ export async function PATCH(req, { params }) {
   if (result.matchedCount === 0) {
     return NextResponse.json({ error: "team or student not found" }, { status: 404 });
   }
+  await bumpVersion("teams");
   return NextResponse.json({ ok: true });
 }

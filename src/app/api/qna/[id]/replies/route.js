@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { requireActiveUser, safeObjectId } from "@/lib/auth";
+import { bumpVersion } from "@/lib/version";
 
 // Add a reply to a question's conversation thread. Allowed for staff
 // (anyone who isn't a student) and for the student who asked the question.
@@ -42,5 +43,6 @@ export async function POST(req, { params }) {
     ts: Date.now(),
   };
   await db.collection("qna").updateOne({ _id: oid }, { $push: { replies: reply } });
+  await bumpVersion("qna");
   return NextResponse.json(reply);
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { requireAdmin } from "@/lib/auth";
+import { bumpVersion } from "@/lib/version";
 
 export async function POST(req, { params }) {
   const { error } = await requireAdmin();
@@ -35,5 +36,6 @@ export async function POST(req, { params }) {
     { _id: teamId },
     { $push: { students: student } }
   );
+  await bumpVersion("teams");
   return NextResponse.json(student);
 }

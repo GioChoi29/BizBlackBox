@@ -11,6 +11,7 @@ import {
   buildVenue,
   buildPrelim,
   buildTransport,
+  buildConfig,
   SEED_PASSWORD,
 } from "@/lib/seedData";
 
@@ -37,7 +38,7 @@ export async function POST() {
   const collections = [
     "teams", "submissions", "users", "qna", "announcements",
     "schedule", "venue", "prelim",
-    "transport", "sessions",
+    "transport", "config", "sessions", "meta",
   ];
   await Promise.all(collections.map((c) => db.collection(c).deleteMany({})));
 
@@ -54,6 +55,7 @@ export async function POST() {
     db.collection("venue").insertMany(buildVenue()),
     db.collection("prelim").insertMany(buildPrelim()),
     db.collection("transport").insertOne(buildTransport()),
+    db.collection("config").insertOne(buildConfig()),
   ]);
 
   await db.collection("submissions").createIndex({ teamId: 1 }, { unique: true });

@@ -3,6 +3,7 @@ import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/mongodb";
 import { requireAdmin, hashPassword, generatePassword } from "@/lib/auth";
 import { sendCredentialsEmail } from "@/lib/email";
+import { bumpVersion } from "@/lib/version";
 
 export async function POST(_req, { params }) {
   const { error } = await requireAdmin();
@@ -22,6 +23,8 @@ export async function POST(_req, { params }) {
   }
   // Invalidate any active sessions for this user so they're forced to sign in again.
   await db.collection("sessions").deleteMany({ userId: new ObjectId(id) });
+
+  await bumpVersion("users");
 
   const user = await db.collection("users").findOne({ _id: new ObjectId(id) });
   const emailResult = await sendCredentialsEmail({

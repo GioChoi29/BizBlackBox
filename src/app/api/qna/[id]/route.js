@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
 import { requireActiveUser, requireAdmin, safeObjectId } from "@/lib/auth";
+import { bumpVersion } from "@/lib/version";
 
 // A private question is visible only to its author and to admins.
 export function canSeeQuestion(q, user) {
@@ -60,6 +61,7 @@ export async function PATCH(req, { params }) {
     return NextResponse.json({ error: "no valid fields to update" }, { status: 400 });
   }
   await db.collection("qna").updateOne({ _id: oid }, { $set: set });
+  await bumpVersion("qna");
   return NextResponse.json({ ok: true });
 }
 
@@ -77,5 +79,6 @@ export async function DELETE(_req, { params }) {
   if (result.deletedCount === 0) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
+  await bumpVersion("qna");
   return NextResponse.json({ ok: true });
 }
