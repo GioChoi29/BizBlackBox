@@ -1111,7 +1111,15 @@ function PgQna({user,items,onAsk,onPatch,onReply,onEditReply,onDelReply,onDelQue
   const canReplyTo=(x)=>user.role!==ROLES.STUDENT||isAuthor(x);
   const canResolve=(x)=>isAdmin||isAuthor(x)||user.role!==ROLES.STUDENT;
   const mineReply=(r)=>isAdmin||String(r.byId||"")===uid||r.by===user.name;
-  const lastOtherTs=(x)=>replies(x).filter(r=>String(r.byId||"")!==uid&&r.by!==user.name).reduce((m,r)=>Math.max(m,r.ts||0),0);
+  const authoredByMe=(byId,by)=>String(byId||"")===uid||by===user.name;
+  // Latest timestamp of activity by someone OTHER than me: the question's own
+  // post (when I didn't ask it) plus every reply I didn't write. This makes a
+  // brand-new question count as unread until it's opened — not just replies.
+  const lastOtherTs=(x)=>{
+    let m=authoredByMe(x.byId,x.by)?0:(x.ts||0);
+    for(const r of replies(x))if(!authoredByMe(r.byId,r.by))m=Math.max(m,r.ts||0);
+    return m;
+  };
   const isUnread=(x)=>lastOtherTs(x)>(reads[x.id]||0);
   const lastActivity=(x)=>Math.max(x.ts||0,...replies(x).map(r=>r.ts||0));
   const markRead=(id)=>setReads(p=>({...p,[id]:Date.now()}));
