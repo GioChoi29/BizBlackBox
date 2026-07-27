@@ -30,6 +30,10 @@ export async function PATCH(req, { params }) {
   const update = {};
   if (typeof body.title === "string") update.title = body.title.trim();
   if (typeof body.body === "string") update.body = body.body.trim();
+  // Soft delete: archived announcements stay in the DB (visible to admins,
+  // e.g. for reference or restoring) but are filtered out of GET for
+  // everyone else. See the GET handler in the parent route.
+  if (typeof body.archived === "boolean") update.archived = body.archived;
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "nothing to update" }, { status: 400 });
   }

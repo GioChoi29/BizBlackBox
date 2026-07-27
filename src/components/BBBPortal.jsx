@@ -430,7 +430,10 @@ export default function BBBPortal(){
   ).then(ok=>ok&&reloadAnn());
   const pinAnn=(id)=>fetch(`/api/announcements/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({togglePin:true})}).then(reloadAnn);
   const editAnn=(id,title,body)=>fetch(`/api/announcements/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({title,body})}).then(reloadAnn);
-  const delAnn=(id)=>fetch(`/api/announcements/${id}`,{method:"DELETE"}).then(reloadAnn);
+  // Soft delete — archived announcements stay visible to admins (Archived tab)
+  // but disappear from everyone else's view. archiveAnn/restoreAnn toggle it.
+  const archiveAnn=(id)=>fetch(`/api/announcements/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({archived:true})}).then(reloadAnn);
+  const restoreAnn=(id)=>fetch(`/api/announcements/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({archived:false})}).then(reloadAnn);
 
   // Generic admin CRUD helpers
   const crudAdd=(path,doc,reload)=>fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(doc)}).then(reload);
@@ -552,7 +555,7 @@ export default function BBBPortal(){
     students:user.role===ROLES.ADMIN?<PgStudents teams={teams} actions={studentActions}/>:null,
     admin:user.role===ROLES.ADMIN?<PgAdmin api={adminApi}/>:null,
     qna:<PgQna user={user} items={qna} onAsk={askQna} onPatch={patchQuestion} onReply={addReply} onEditReply={editReply} onDelReply={delReply} onDelQuestion={delQuestion}/>,
-    announcements:<PgAnn user={user} items={ann} onAdd={addAnn} onPin={pinAnn} onEdit={editAnn} onDel={delAnn}/>,
+    announcements:<PgAnn user={user} items={ann} onAdd={addAnn} onPin={pinAnn} onEdit={editAnn} onArchive={archiveAnn} onRestore={restoreAnn}/>,
   };
   return(
     <div style={{minHeight:"100vh",background:"#fff",color:s.txt,fontFamily:"'Archivo',sans-serif",display:"flex"}}>
@@ -683,7 +686,7 @@ function PgHome({user,teams,ann,mentors=[],deadline,setTab}){
         <button onClick={()=>setTab("announcements")} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",fontWeight:500,color:s.accent,background:"none",border:"none",cursor:"pointer"}}>View All →</button>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        {ann.slice(0,2).map(a=>(
+        {ann.filter(a=>!a.archived).slice(0,2).map(a=>(
           <div key={a.id} style={{borderRadius:18,padding:"22px 26px",position:"relative",background:"#fafafb",border:"1px solid #ececef",transition:"transform 0.16s",cursor:"default"}}
             onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
             onMouseLeave={e=>e.currentTarget.style.transform=""}>
@@ -1173,12 +1176,12 @@ function PgQna({user,items,onAsk,onPatch,onReply,onEditReply,onDelReply,onDelQue
         {list.map(x=>{
           const unread=isUnread(x);const active=selectedId===x.id&&wide;const rc=replies(x).length;
           return(
-            <button key={x.id} onClick={()=>open(x)} style={{textAlign:"left",width:"100%",borderRadius:14,padding:"14px 16px",background:active?"#efedfb":"#fafafb",border:`1px solid ${active?s.accent:unread?"#e0dbf8":"#ececef"}`,cursor:"pointer",fontFamily:"inherit",transition:"background 0.12s"}}>
+            <button key={x.id} onClick={()=>open(x)} style={{textAlign:"left",width:"100%",borderRadius:14,padding:"14px 16px",background:active?"#efedfb":unread?s.infoD:"#fafafb",border:`1px solid ${active?s.accent:unread?"#93c5fd":"#ececef"}`,cursor:"pointer",fontFamily:"inherit",transition:"background 0.12s"}}>
               <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:13.5,fontWeight:700,color:"#0d0f16",lineHeight:1.4,display:"flex",alignItems:"center",gap:6}}>
                     <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis"}}>{x.title}</span>
-                    {unread&&<span title="New replies" style={{width:8,height:8,borderRadius:"50%",background:s.accent,flexShrink:0}}/>}
+                    {unread&&<span title="New replies" style={{width:9,height:9,borderRadius:"50%",background:s.info,boxShadow:`0 0 0 3px rgba(59,130,246,0.18)`,flexShrink:0}}/>}
                   </div>
                   <div style={{fontSize:10.5,color:s.txt2,marginTop:5,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                     <span style={{fontFamily:"'JetBrains Mono',monospace"}}>{x.by} · {relTime(x.ts)}</span>
@@ -1290,13 +1293,19 @@ function PgQna({user,items,onAsk,onPatch,onReply,onEditReply,onDelReply,onDelQue
   );
 }
 
-function PgAnn({user,items,onAdd,onPin,onEdit,onDel}){
+function PgAnn({user,items,onAdd,onPin,onEdit,onArchive,onRestore}){
   const[ti,setTi]=useState("");const[bo,setBo]=useState("");const isAd=user.role===ROLES.ADMIN;
   const[editMap,setEditMap]=useState({});const[editVals,setEditVals]=useState({});
+  // Admin-only view toggle. Non-admins never receive archived items from the
+  // API at all, so `items` is always just the active list for them.
+  const[view,setView]=useState("active");
   const startEdit=(a)=>{setEditMap(p=>({...p,[a.id]:true}));setEditVals(p=>({...p,[a.id]:{ti:a.title,bo:a.body}}));};
   const cancelEdit=(id)=>setEditMap(p=>({...p,[id]:false}));
   const saveEdit=(id)=>{const v=editVals[id];if(v&&v.ti.trim()&&v.bo.trim()){onEdit(id,v.ti.trim(),v.bo.trim());setEditMap(p=>({...p,[id]:false}));}};
   const inputSt={width:"100%",padding:"12px 14px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:13,fontFamily:"inherit",marginBottom:10};
+  const archivedItems=items.filter(a=>a.archived);
+  const activeItems=items.filter(a=>!a.archived);
+  const shown=isAd&&view==="archived"?archivedItems:activeItems;
   const renderAnn=(a)=>{
     if(isAd&&editMap[a.id]){
       const v=editVals[a.id]||{ti:a.title,bo:a.body};
@@ -1312,20 +1321,29 @@ function PgAnn({user,items,onAdd,onPin,onEdit,onDel}){
       );
     }
     return(
-      <div key={a.id} style={{borderRadius:18,padding:"22px 26px",background:"#fafafb",border:"1px solid #ececef",position:"relative",marginBottom:10,transition:"transform 0.16s"}}
+      <div key={a.id} style={{borderRadius:18,padding:"22px 26px",background:a.archived?"#f5f5f7":"#fafafb",border:`1px solid ${s.border}`,position:"relative",marginBottom:10,transition:"transform 0.16s"}}
         onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
         onMouseLeave={e=>e.currentTarget.style.transform=""}>
-        {a.pinned&&<div style={{position:"absolute",left:0,top:22,bottom:22,width:3,borderRadius:3,background:s.accent}}/>}
+        {a.pinned&&!a.archived&&<div style={{position:"absolute",left:0,top:22,bottom:22,width:3,borderRadius:3,background:s.accent}}/>}
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,marginBottom:8}}>
           <div style={{flex:1}}>
-            {a.pinned&&<MonoTag style={{display:"block",marginBottom:6}}>Pinned</MonoTag>}
+            <div style={{display:"flex",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+              {a.pinned&&!a.archived&&<MonoTag>Pinned</MonoTag>}
+              {a.archived&&<MonoTag style={{color:s.warn}}>Archived</MonoTag>}
+            </div>
             <span style={{fontSize:16,fontWeight:700,color:"#0d0f16"}}>{a.title}</span>
           </div>
           {isAd&&(
             <div style={{display:"flex",gap:5,flexShrink:0}}>
-              <button onClick={()=>onPin(a.id)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${s.border}`,background:"#fff",color:s.txt2,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{a.pinned?"Unpin":"Pin"}</button>
-              <button onClick={()=>startEdit(a)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${s.border}`,background:"#fff",color:s.accent,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Edit</button>
-              <button onClick={()=>window.confirm("Delete this announcement?")&&onDel(a.id)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${s.err}30`,background:s.errD,color:s.err,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Del</button>
+              {a.archived?(
+                <button onClick={()=>onRestore(a.id)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${s.ok}30`,background:s.okD,color:s.ok,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Restore</button>
+              ):(
+                <>
+                  <button onClick={()=>onPin(a.id)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${s.border}`,background:"#fff",color:s.txt2,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{a.pinned?"Unpin":"Pin"}</button>
+                  <button onClick={()=>startEdit(a)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${s.border}`,background:"#fff",color:s.accent,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Edit</button>
+                  <button onClick={()=>window.confirm("Archive this announcement? It will no longer be visible to students or mentors — you can restore it later from the Archived tab.")&&onArchive(a.id)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${s.warn}30`,background:s.warnD,color:s.warn,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Archive</button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1340,6 +1358,12 @@ function PgAnn({user,items,onAdd,onPin,onEdit,onDel}){
     <div style={{animation:"fadeUp 0.4s ease"}}>
       <PageHeader eyebrow="Official Updates">Announcements</PageHeader>
       {isAd&&(
+        <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
+          <Pill active={view==="active"} onClick={()=>setView("active")}>Active</Pill>
+          <Pill active={view==="archived"} onClick={()=>setView("archived")}>Archived ({archivedItems.length})</Pill>
+        </div>
+      )}
+      {isAd&&view==="active"&&(
         <div style={{borderRadius:18,padding:"22px 24px",background:"#fafafb",border:"1px solid #ececef",marginBottom:24}}>
           <MonoTag style={{display:"block",marginBottom:14,color:s.txt2}}>Post New Announcement</MonoTag>
           <input value={ti} onChange={e=>setTi(e.target.value)} placeholder="Title…" style={inputSt} onFocus={e=>e.target.style.borderColor=s.accent} onBlur={e=>e.target.style.borderColor=s.border}/>
@@ -1352,10 +1376,12 @@ function PgAnn({user,items,onAdd,onPin,onEdit,onDel}){
         </div>
       )}
       <div style={{display:"flex",flexDirection:"column"}}>
-        {items.filter(a=>a.pinned).map(a=>renderAnn(a))}
-        {items.filter(a=>!a.pinned).map(a=>renderAnn(a))}
-        {items.length===0&&(
-          <EmptyState icon={<I.Bell/>} title="No announcements yet" msg={isAd?"Post the first update above.":"Check back here when staff posts something."}/>
+        {shown.filter(a=>a.pinned).map(a=>renderAnn(a))}
+        {shown.filter(a=>!a.pinned).map(a=>renderAnn(a))}
+        {shown.length===0&&(
+          <EmptyState icon={<I.Bell/>}
+            title={view==="archived"?"No archived announcements":"No announcements yet"}
+            msg={view==="archived"?"Announcements you archive will show up here so you can restore them later.":(isAd?"Post the first update above.":"Check back here when staff posts something.")}/>
         )}
       </div>
     </div>

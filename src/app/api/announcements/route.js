@@ -4,10 +4,13 @@ import { requireActiveUser, requireAdmin } from "@/lib/auth";
 import { bumpVersion } from "@/lib/version";
 
 export async function GET() {
-  const { error } = await requireActiveUser();
+  const { error, user } = await requireActiveUser();
   if (error) return error;
   const db = await getDb();
-  const items = await db.collection("announcements").find({}).sort({ pinned: -1, ts: -1 }).toArray();
+  // Archived announcements are admin-only — everyone else never receives
+  // them, so there's no client-side gate to bypass.
+  const filter = user.role === "admin" ? {} : { archived: { $ne: true } };
+  const items = await db.collection("announcements").find(filter).sort({ pinned: -1, ts: -1 }).toArray();
   return NextResponse.json(items.map((x) => ({ ...x, id: x._id.toString() })));
 }
 
@@ -26,6 +29,7 @@ export async function POST(req) {
     author: user.name,
     ts: Date.now(),
     pinned: false,
+    archived: false,
   };
   const result = await db.collection("announcements").insertOne(doc);
   await bumpVersion("announcements");
