@@ -444,6 +444,12 @@ export default function BBBPortal(){
     fetch("/api/config",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(doc)}),
     "Saved","Couldn't save"
   ).then(ok=>ok&&reloadConfig());
+  // Edit a team's work room (admin). The room lives on the team doc, so this
+  // one write updates the Teams page, Students tab, and every student's My Room.
+  const saveTeam=(teamId,patch)=>mutate(
+    fetch(`/api/teams/${teamId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(patch)}),
+    "Work room updated","Couldn't update work room"
+  ).then(ok=>ok&&reloadTeams());
 
   // Optimistic CRUD for students & users (admin). Each updates local React
   // state immediately so the UI feels instant, sends the write in the
@@ -545,7 +551,7 @@ export default function BBBPortal(){
   const pages={
     home:<PgHome user={user} teams={teams} ann={ann} mentors={mentors} deadline={deadline} setTab={setTab}/>,
     schedule:<PgSchedule user={user} teams={teams} sched={sched} prelimList={prelimList}/>,
-    teams:<PgTeams user={user} teams={teams} mentors={mentors}/>,
+    teams:<PgTeams user={user} teams={teams} mentors={mentors} onSaveWorkRoom={saveTeam}/>,
     transport:<PgTransport transport={transport}/>,
     venue:<PgVenue venueList={venueList}/>,
     rooms:<PgRooms user={user} teams={teams} users={users}/>,
@@ -774,8 +780,27 @@ function PgSchedule({user,teams,sched=[],prelimList=[]}){
   );
 }
 
-function PgTeams({user,teams,mentors=[]}){
+function TeamWorkRoomEditor({tm,onSave}){
+  const[val,setVal]=useState(tm.workRoom||"");
+  // Re-sync the draft if the stored value changes (e.g. another admin edits it).
+  useEffect(()=>{setVal(tm.workRoom||"");},[tm.workRoom]);
+  const commit=()=>{const v=normalizeRoom(val);if(v!==(tm.workRoom||"")){setVal(v);onSave(tm.id,{workRoom:v});}};
+  return(
+    <div style={{marginBottom:16}}>
+      <MonoTag style={{display:"block",marginBottom:8,color:s.txt2}}>Work Room</MonoTag>
+      <input value={val} onChange={e=>setVal(e.target.value)} onBlur={commit}
+        onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}
+        placeholder="e.g. 201"
+        style={{maxWidth:220,padding:"9px 12px",borderRadius:8,border:`1px solid ${s.border}`,fontSize:13,fontFamily:"inherit",outline:"none",background:"#fff",color:s.txt,boxSizing:"border-box"}}
+        onFocus={e=>e.target.style.borderColor=s.accent}/>
+      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:s.txtM,letterSpacing:"0.06em",marginTop:6}}>Press Enter or click away to save.</div>
+    </div>
+  );
+}
+
+function PgTeams({user,teams,mentors=[],onSaveWorkRoom}){
   const[srch,setSrch]=useState("");const[exp,setExp]=useState(user.team||null);
+  const isAdmin=user.role===ROLES.ADMIN;
   // Mentor name comes from the actual JM user account (kept current), not the
   // team's stored copy.
   const jmByTeam=Object.fromEntries(mentors.filter(m=>m.role==="junior_mentor").map(m=>[m.teamId,m.name]));
@@ -801,6 +826,7 @@ function PgTeams({user,teams,mentors=[]}){
             {open&&(
               <div style={{padding:"0 22px 18px",animation:"fadeUp 0.2s ease"}}>
                 <div style={{borderTop:"1px solid #ececef",paddingTop:14}}>
+                  {isAdmin&&<TeamWorkRoomEditor tm={tm} onSave={onSaveWorkRoom}/>}
                   <MonoTag style={{display:"block",marginBottom:10,color:s.txt2}}>Students ({tm.students.length})</MonoTag>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:6}}>
                     {tm.students.map(st=>(
@@ -1025,6 +1051,8 @@ function CheckinList({team,onChk,canToggle}){
 function PgCheckin({user,teams,onChk}){
   const[sel,setSel]=useState(user.team||1);
   const myTm=user.team?teams.find(x=>x.id===user.team):null;
+  // Only an admin can actually toggle check-in; SM and JM see it read-only.
+  const canToggle=user.role===ROLES.ADMIN;
   if(user.role===ROLES.ADMIN||user.role===ROLES.SM){
     const liveTeams=teams.filter(x=>(x.students||[]).length>0);const team=liveTeams.find(x=>x.id===sel)||liveTeams[0];const gc=liveTeams.reduce((a,x)=>a+x.students.filter(st=>st.checkedIn).length,0);const gt=liveTeams.reduce((a,x)=>a+x.students.length,0);
     return(
@@ -1042,12 +1070,13 @@ function PgCheckin({user,teams,onChk}){
             </div>
           </div>
         </div>
+        {!canToggle&&<div style={{marginBottom:16,padding:"10px 14px",borderRadius:10,background:s.infoD,border:`1px solid ${s.info}22`,color:s.info,fontSize:12,fontWeight:600}}>View only — check-in is managed by admins.</div>}
         <div style={{marginBottom:16}}>
           <select value={sel} onChange={e=>setSel(parseInt(e.target.value))} style={{width:"100%",maxWidth:280,padding:"12px 14px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>
             {liveTeams.map(tm=><option key={tm.id} value={tm.id}>{tm.name} ({tm.students.filter(st=>st.checkedIn).length}/{tm.students.length})</option>)}
           </select>
         </div>
-        {team&&<CheckinList team={team} onChk={onChk} canToggle/>}
+        {team&&<CheckinList team={team} onChk={onChk} canToggle={canToggle}/>}
       </div>
     );
   }
@@ -1055,7 +1084,8 @@ function PgCheckin({user,teams,onChk}){
     return(
       <div style={{animation:"fadeUp 0.4s ease"}}>
         <PageHeader eyebrow="Attendance">Team Check-in</PageHeader>
-        <CheckinList team={myTm} onChk={onChk} canToggle/>
+        <div style={{marginBottom:16,padding:"10px 14px",borderRadius:10,background:s.infoD,border:`1px solid ${s.info}22`,color:s.info,fontSize:12,fontWeight:600}}>View only — check-in is managed by admins.</div>
+        <CheckinList team={myTm} onChk={onChk} canToggle={false}/>
       </div>
     );
   }

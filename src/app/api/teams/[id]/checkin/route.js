@@ -1,23 +1,18 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
-import { requireActiveUser, isStaff } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { bumpVersion } from "@/lib/version";
 
-// Only event staff (admin / SM) or the JM of this specific team can mark
-// students checked-in. Students never check themselves in.
+// Admin-only: only an admin can mark students checked-in. Mentors and students
+// get a read-only view of attendance in the UI; they never write here.
 export async function PATCH(req, { params }) {
-  const { error, user } = await requireActiveUser();
+  const { error } = await requireAdmin();
   if (error) return error;
 
   const { id } = await params;
   const teamId = parseInt(id);
   if (!Number.isInteger(teamId)) {
     return NextResponse.json({ error: "invalid team id" }, { status: 400 });
-  }
-
-  const isOwnJM = user.role === "junior_mentor" && user.teamId === teamId;
-  if (!isStaff(user) && !isOwnJM) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const { studentId, checkedIn } = await req.json();
