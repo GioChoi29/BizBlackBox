@@ -457,18 +457,9 @@ export default function BBBPortal(){
   // student/user collections are kept in sync by mirroring the server's
   // cascade locally (deleting one side removes the linked entry on the other).
   const studentActions={
-    // Add needs the server-generated id, so we await the write then splice the
-    // returned record straight in — no full-collection refetch.
-    add:async(teamId,addForm)=>{
-      const res=await fetch(`/api/teams/${teamId}/students`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(addForm)}).catch(()=>null);
-      if(!res||res.status===401){if(res)bounceToLogin();else toast.error("Network error");return null;}
-      const data=await res.json().catch(()=>({}));
-      if(!res.ok){toast.error(data.error||"Failed to add student");return null;}
-      const tid=parseInt(teamId);
-      markMutation();
-      setTeams(p=>p.map(t=>t.id===tid?{...t,students:[...(t.students||[]),data]}:t));
-      return data;
-    },
+    // Students are created via the Admin Console → Users tab (which also links
+    // the login account); this page only edits and removes existing roster
+    // entries.
     update:async(teamId,studentId,form)=>{
       markMutation();
       setTeams(p=>p.map(t=>t.id===teamId?{...t,students:t.students.map(st=>st.id===studentId?{...st,...form}:st)}:t));
@@ -1974,86 +1965,12 @@ function EditableField({label,value,onChange,mono}){
     </div>
   );
 }
-function AddStudentModal({teams,form,setForm,onSave,onClose,saving}){
-  const setF=(k,v)=>setForm(p=>({...p,[k]:v}));
-  const fld={width:"100%",padding:"9px 12px",borderRadius:8,border:`1px solid ${s.border}`,fontSize:13,fontFamily:"inherit",outline:"none",background:"#fff",color:s.txt,boxSizing:"border-box"};
-  const lbl={fontSize:10,fontWeight:700,color:s.txt2,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4,display:"block"};
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(20,22,29,0.55)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div style={{background:"#fff",borderRadius:18,padding:"26px 28px",maxWidth:520,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 12px 40px rgba(0,0,0,0.25)"}}>
-        <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,color:s.accent,marginBottom:8}}>New Student</div>
-        <div style={{fontWeight:800,fontSize:20,letterSpacing:"-0.01em",color:"#0d0f16",marginBottom:18}}>Add to a team</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:6}}>
-          <div>
-            <label style={lbl}>Team *</label>
-            <select value={form.teamId} onChange={e=>setF("teamId",e.target.value)} style={fld}>
-              {teams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={lbl}>Name *</label>
-            <input value={form.name} onChange={e=>setF("name",e.target.value)} style={fld} autoFocus/>
-          </div>
-          <div>
-            <label style={lbl}>Phone</label>
-            <input value={form.phone} onChange={e=>setF("phone",e.target.value)} style={fld}/>
-          </div>
-          <div>
-            <label style={lbl}>Email</label>
-            <input value={form.email} onChange={e=>setF("email",e.target.value)} style={fld}/>
-          </div>
-          <div>
-            <label style={lbl}>Transport</label>
-            <input value={form.transport} onChange={e=>setF("transport",e.target.value)} style={fld}/>
-          </div>
-          <div>
-            <label style={lbl}>Insurance</label>
-            <input value={form.insurance} onChange={e=>setF("insurance",e.target.value)} style={fld}/>
-          </div>
-          <div>
-            <label style={lbl}>Emergency contact name</label>
-            <input value={form.emergencyName} onChange={e=>setF("emergencyName",e.target.value)} style={fld}/>
-          </div>
-          <div>
-            <label style={lbl}>Relationship</label>
-            <input value={form.emergencyRel} onChange={e=>setF("emergencyRel",e.target.value)} style={fld}/>
-          </div>
-          <div style={{gridColumn:"1 / -1"}}>
-            <label style={lbl}>Emergency contact phone</label>
-            <input value={form.emergencyPhone} onChange={e=>setF("emergencyPhone",e.target.value)} style={fld}/>
-          </div>
-        </div>
-        <p style={{fontSize:12,color:s.txt2,marginTop:14,marginBottom:18}}>Only name + team are required. Other fields can be filled later from the detail page.</p>
-        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-          <button onClick={onClose} disabled={saving} style={{padding:"10px 18px",borderRadius:10,border:`1px solid ${s.border}`,background:"#fff",color:s.txt2,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
-          <button onClick={onSave} disabled={saving} style={{padding:"10px 22px",borderRadius:10,border:"none",background:s.accent,color:"#fff",fontSize:13,fontWeight:700,cursor:saving?"wait":"pointer",fontFamily:"inherit",opacity:saving?0.7:1}}>{saving?"Adding…":"Add Student"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function PgStudents({teams,actions}){
   const[srch,setSrch]=useState("");
   const[selKey,setSelKey]=useState(null); // {teamId, studentId}
   const[editing,setEditing]=useState(false);
   const[form,setForm]=useState(null);
-  const[addOpen,setAddOpen]=useState(false);
-  const[addForm,setAddForm]=useState({teamId:"",name:"",phone:"",email:"",transport:"",insurance:"",emergencyName:"",emergencyRel:"",emergencyPhone:""});
-  const[addSaving,setAddSaving]=useState(false);
 
-  const openAdd=()=>{setAddForm({teamId:teams[0]?.id||"",name:"",phone:"",email:"",transport:"",insurance:"",emergencyName:"",emergencyRel:"",emergencyPhone:""});setAddOpen(true);};
-  const submitAdd=async()=>{
-    if(!addForm.name.trim())return alert("Name is required");
-    if(!addForm.teamId)return alert("Pick a team");
-    setAddSaving(true);
-    try{
-      const newStudent=await actions.add(addForm.teamId,addForm);
-      if(!newStudent)return;
-      setAddOpen(false);
-      setSelKey({teamId:parseInt(addForm.teamId),studentId:newStudent.id});
-    }finally{setAddSaving(false);}
-  };
   const deleteStudent=async()=>{
     if(!sel)return;
     if(!confirm(`Delete ${sel.name}? This removes them from ${sel.team.name} and cannot be undone.`))return;
@@ -2142,11 +2059,7 @@ function PgStudents({teams,actions}){
   }
   return(
     <div style={{animation:"fadeUp 0.4s ease"}}>
-      {addOpen&&<AddStudentModal teams={teams} form={addForm} setForm={setAddForm} onSave={submitAdd} onClose={()=>setAddOpen(false)} saving={addSaving}/>}
-      <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:16,marginBottom:14}}>
-        <PageHeader eyebrow="Admin View" mb={0}>Students</PageHeader>
-        <button onClick={openAdd} style={{padding:"10px 18px",borderRadius:100,border:"none",background:s.accent,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>+ Add Student</button>
-      </div>
+      <PageHeader eyebrow="Admin View">Students</PageHeader>
       <SearchInput value={srch} onChange={e=>setSrch(e.target.value)} placeholder="Search by student name…"/>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {filtered.map(st=>(
