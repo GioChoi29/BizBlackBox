@@ -551,7 +551,7 @@ export default function BBBPortal(){
     contacts:<PgContacts teams={teams} mentors={mentors}/>,
     submission:<PgSubmission user={user} teams={teams} submissions={submissions} onUpdate={setSubmissionStatus}/>,
     checkin:<PgCheckin user={user} teams={teams} onChk={chk}/>,
-    students:user.role===ROLES.ADMIN?<PgStudents teams={teams} actions={studentActions}/>:null,
+    students:user.role===ROLES.ADMIN?<PgStudents teams={teams} users={users} actions={studentActions}/>:null,
     admin:user.role===ROLES.ADMIN?<PgAdmin api={adminApi}/>:null,
     qna:<PgQna user={user} items={qna} onAsk={askQna} onPatch={patchQuestion} onReply={addReply} onEditReply={editReply} onDelReply={delReply} onDelQuestion={delQuestion}/>,
     announcements:<PgAnn user={user} items={ann} onAdd={addAnn} onPin={pinAnn} onEdit={editAnn} onArchive={archiveAnn} onRestore={restoreAnn}/>,
@@ -1798,16 +1798,18 @@ function AdminRoomsTable({section}){
   const[query,setQuery]=useState("");
   const rows=[];
   (teams||[]).forEach(tm=>(tm.students||[]).forEach(st=>rows.push({
-    key:`s-${tm.id}-${st.id}`,name:st.name,sub:tm.name,room:st.room||"",floor:st.floor||"",
+    key:`s-${tm.id}-${st.id}`,name:st.name,sub:tm.name,teamId:tm.id,room:st.room||"",floor:st.floor||"",
     save:(patch)=>updateStudent(tm.id,st.id,patch),
   })));
   (users||[]).filter(u=>u.role==="junior_mentor"||u.role==="senior_mentor").forEach(u=>rows.push({
-    key:`u-${u.id}`,name:u.name,sub:u.role==="senior_mentor"?"Senior Mentor":(u.teamId!=null?`JM · Team ${u.teamId}`:"JM"),room:u.room||"",floor:u.floor||"",
+    key:`u-${u.id}`,name:u.name,sub:u.role==="senior_mentor"?"Senior Mentor":(u.teamId!=null?`JM · Team ${u.teamId}`:"JM"),teamId:u.teamId??null,room:u.room||"",floor:u.floor||"",
     save:(patch)=>updateUser(u.id,patch),
   }));
   const q=query.trim().toLowerCase();
+  // Group by team number (ascending); people without a team (SMs, unassigned)
+  // fall to the bottom. Within a team, order by name.
   const filtered=(q?rows.filter(r=>r.name.toLowerCase().includes(q)||r.sub.toLowerCase().includes(q)):rows)
-    .slice().sort((a,b)=>roomNum(a.room)-roomNum(b.room)||a.name.localeCompare(b.name));
+    .slice().sort((a,b)=>((a.teamId??Infinity)-(b.teamId??Infinity))||a.name.localeCompare(b.name));
   return(
     <div>
       <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by name…" style={{...adminInputSt,marginBottom:12}}/>
@@ -1969,7 +1971,7 @@ function EditableField({label,value,onChange,mono}){
     </div>
   );
 }
-function PgStudents({teams,actions}){
+function PgStudents({teams,users=[],actions}){
   const[srch,setSrch]=useState("");
   const[selKey,setSelKey]=useState(null); // {teamId, studentId}
   const[editing,setEditing]=useState(false);
@@ -1982,8 +1984,20 @@ function PgStudents({teams,actions}){
     actions.remove(sel.team.id,sel.id,sel.userId);
   };
 
+  // Contact info entered on the Users tab lives on the user record. Fall back to
+  // it when the roster entry's phone/email is blank (e.g. seeded students, or
+  // rows created before contact-sync existed) so the profile always shows it.
+  const userById={};
+  (users||[]).forEach(u=>{userById[String(u.id)]=u;});
   const allStudents=[];
-  teams.forEach(tm=>tm.students.forEach(st=>allStudents.push({...st,team:tm,room:st.room||null,floor:st.floor||null})));
+  teams.forEach(tm=>tm.students.forEach(st=>{
+    const lu=st.userId?userById[String(st.userId)]:null;
+    allStudents.push({
+      ...st,team:tm,room:st.room||null,floor:st.floor||null,
+      phone:st.phone||lu?.phone||null,
+      email:st.email||lu?.email||null,
+    });
+  }));
   const sel=selKey?allStudents.find(st=>st.team.id===selKey.teamId&&st.id===selKey.studentId):null;
 
   const startEdit=()=>{
