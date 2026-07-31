@@ -89,15 +89,15 @@ export async function POST(req) {
   }
 
   // If the user is a student with a team, also add them to that team's roster
-  // with their name + email pre-filled. Other fields (phone, emergency contact)
-  // start blank — admin can fill them in later from the Students tab.
+  // with their name + phone + email pre-filled. Remaining fields (emergency
+  // contact, etc.) start blank — admin can fill them in from the Students tab.
   let studentLinked = false;
   if (doc.role === "student" && doc.teamId != null) {
     const studentEntry = {
       id: `${doc.teamId}-${Date.now()}`,
       name: doc.name,
       checkedIn: false,
-      phone: null,
+      phone: doc.phone || null,
       email: doc.email || null,
       transport: null,
       insurance: null,

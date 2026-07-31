@@ -121,12 +121,17 @@ export async function PATCH(req, { params }) {
     }
   }
 
-  // Keep the linked roster entry's display name in sync so the Students tab
-  // (and check-in, teams, etc.) always show the student's real name.
-  if (update.name !== undefined) {
+  // Keep the linked roster entry's contact fields in sync with the user record
+  // so the Students tab shows the same name / phone / email entered on the
+  // Users tab.
+  const rosterSync = {};
+  if (update.name !== undefined) rosterSync["students.$[s].name"] = update.name;
+  if (update.phone !== undefined) rosterSync["students.$[s].phone"] = update.phone || null;
+  if (update.email !== undefined) rosterSync["students.$[s].email"] = update.email || null;
+  if (Object.keys(rosterSync).length > 0) {
     await db.collection("teams").updateMany(
       { "students.userId": id },
-      { $set: { "students.$[s].name": update.name } },
+      { $set: rosterSync },
       { arrayFilters: [{ "s.userId": id }] }
     );
   }

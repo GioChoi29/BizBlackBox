@@ -502,7 +502,9 @@ export default function BBBPortal(){
       const res=await fetch(`/api/users/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)}).catch(()=>null);
       if(!res||!res.ok){toast.error("Couldn't update — reverted");reloadUsers();return false;}
       reloadMentors(); // a name/phone/email/role change may affect Contacts
-      if("name" in form)reloadTeams(); // server syncs the linked roster name
+      // Server syncs name/phone/email (and any team move) onto the linked roster
+      // entry — refetch teams so the Students tab reflects it right away.
+      if("name" in form||"phone" in form||"email" in form||"teamId" in form)reloadTeams();
       return true;
     },
     // Mirror the server cascade: drop the user AND any roster entry linked to it.
@@ -1745,11 +1747,13 @@ function AdminUsersTable({section}){
   const q=query.trim().toLowerCase();
   const roleTabs=[{v:"student",l:"Students"},{v:"junior_mentor",l:"Junior Mentors"},{v:"senior_mentor",l:"Senior Mentors"},{v:"admin",l:"Admins"}];
   const countByRole=(r)=>(items||[]).filter(u=>u.role===r).length;
-  // Scope to the selected role group, then search, then sort alphabetically by name.
+  // Scope to the selected role group, then search. Students sort by team number
+  // (then name within a team); other roles sort alphabetically by name.
+  const byTeamThenName=(a,b)=>((a.teamId??Infinity)-(b.teamId??Infinity))||(a.name||"").localeCompare(b.name||"");
   const filtered=(items||[])
     .filter(u=>u.role===roleTab)
     .filter(u=>!q||(u.name||"").toLowerCase().includes(q)||(u.username||"").toLowerCase().includes(q))
-    .sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+    .sort(roleTab==="student"?byTeamThenName:(a,b)=>(a.name||"").localeCompare(b.name||""));
 
   return(
     <div>
