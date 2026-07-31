@@ -1004,6 +1004,32 @@ function PgRooms({user,teams,users=[]}){
   );
 }
 
+// One student's check-in row. Shared by the per-team list and the name-search
+// results. `showTeam` appends the team name (used when results span teams).
+function CheckinRow({team,st,onChk,canToggle,showTeam}){
+  const id=`chk-${team.id}-${st.id}`;
+  const row=(
+    <span style={{flex:1,display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:9,border:`1px solid ${st.checkedIn?"#cbe7da":"#ececef"}`,background:st.checkedIn?"#eef9f4":"#fff",fontFamily:"inherit",color:s.txt,transition:"border-color 0.13s",cursor:canToggle?"pointer":"default"}}>
+      <span aria-hidden="true" style={{width:17,height:17,borderRadius:4,border:`2px solid ${st.checkedIn?s.ok:s.border}`,background:st.checkedIn?s.ok:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.13s"}}>
+        {st.checkedIn&&<span style={{color:"#fff",fontSize:9,fontWeight:800}}>✓</span>}
+      </span>
+      <span style={{fontSize:12,fontWeight:st.checkedIn?600:400,color:st.checkedIn?"#0d0f16":s.txt2}}>{st.name}</span>
+      {showTeam&&<span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:s.txtM,marginLeft:8}}>{team.name}</span>}
+      {st.checkedIn&&<MonoTag style={{marginLeft:"auto",color:s.ok}}>In</MonoTag>}
+    </span>
+  );
+  return(
+    <li style={{display:"flex"}}>
+      {canToggle?(
+        <label htmlFor={id} style={{flex:1,display:"flex",cursor:"pointer"}}>
+          <input id={id} type="checkbox" checked={!!st.checkedIn} onChange={()=>onChk(team.id,st.id)} style={srOnly} aria-label={`Toggle check-in for ${st.name}`}/>
+          {row}
+        </label>
+      ):row}
+    </li>
+  );
+}
+
 function CheckinList({team,onChk,canToggle}){
   const cnt=team.students.filter(st=>st.checkedIn).length;
   const complete=cnt===team.students.length;
@@ -1014,28 +1040,7 @@ function CheckinList({team,onChk,canToggle}){
         <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:700,color:complete?s.ok:s.txt2}}>{cnt}/{team.students.length}</div>
       </div>
       <ul style={{listStyle:"none",display:"flex",flexDirection:"column",gap:4,padding:0,margin:0}}>
-        {team.students.map(st=>{
-          const id=`chk-${team.id}-${st.id}`;
-          const row=(
-            <span style={{flex:1,display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:9,border:`1px solid ${st.checkedIn?"#cbe7da":"#ececef"}`,background:st.checkedIn?"#eef9f4":"#fff",fontFamily:"inherit",color:s.txt,transition:"border-color 0.13s",cursor:canToggle?"pointer":"default"}}>
-              <span aria-hidden="true" style={{width:17,height:17,borderRadius:4,border:`2px solid ${st.checkedIn?s.ok:s.border}`,background:st.checkedIn?s.ok:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.13s"}}>
-                {st.checkedIn&&<span style={{color:"#fff",fontSize:9,fontWeight:800}}>✓</span>}
-              </span>
-              <span style={{fontSize:12,fontWeight:st.checkedIn?600:400,color:st.checkedIn?"#0d0f16":s.txt2}}>{st.name}</span>
-              {st.checkedIn&&<MonoTag style={{marginLeft:"auto",color:s.ok}}>In</MonoTag>}
-            </span>
-          );
-          return(
-            <li key={st.id} style={{display:"flex"}}>
-              {canToggle?(
-                <label htmlFor={id} style={{flex:1,display:"flex",cursor:"pointer"}}>
-                  <input id={id} type="checkbox" checked={!!st.checkedIn} onChange={()=>onChk(team.id,st.id)} style={srOnly} aria-label={`Toggle check-in for ${st.name}`}/>
-                  {row}
-                </label>
-              ):row}
-            </li>
-          );
-        })}
+        {team.students.map(st=><CheckinRow key={st.id} team={team} st={st} onChk={onChk} canToggle={canToggle}/>)}
       </ul>
     </div>
   );
@@ -1043,11 +1048,15 @@ function CheckinList({team,onChk,canToggle}){
 
 function PgCheckin({user,teams,onChk}){
   const[sel,setSel]=useState(user.team||1);
+  const[srch,setSrch]=useState("");
   const myTm=user.team?teams.find(x=>x.id===user.team):null;
   // Only an admin can actually toggle check-in; SM and JM see it read-only.
   const canToggle=user.role===ROLES.ADMIN;
   if(user.role===ROLES.ADMIN||user.role===ROLES.SM){
     const liveTeams=teams.filter(x=>(x.students||[]).length>0);const team=liveTeams.find(x=>x.id===sel)||liveTeams[0];const gc=liveTeams.reduce((a,x)=>a+x.students.filter(st=>st.checkedIn).length,0);const gt=liveTeams.reduce((a,x)=>a+x.students.length,0);
+    // Name search spans every team; when active it replaces the team view.
+    const q=srch.trim().toLowerCase();
+    const matches=q?liveTeams.flatMap(tm=>tm.students.filter(st=>st.name.toLowerCase().includes(q)).map(st=>({team:tm,st}))):[];
     return(
       <div style={{animation:"fadeUp 0.4s ease"}}>
         <PageHeader eyebrow="Attendance">Check-in</PageHeader>
@@ -1064,12 +1073,27 @@ function PgCheckin({user,teams,onChk}){
           </div>
         </div>
         {!canToggle&&<div style={{marginBottom:16,padding:"10px 14px",borderRadius:10,background:s.infoD,border:`1px solid ${s.info}22`,color:s.info,fontSize:12,fontWeight:600}}>View only — check-in is managed by admins.</div>}
-        <div style={{marginBottom:16}}>
-          <select value={sel} onChange={e=>setSel(parseInt(e.target.value))} style={{width:"100%",maxWidth:280,padding:"12px 14px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>
-            {liveTeams.map(tm=><option key={tm.id} value={tm.id}>{tm.name} ({tm.students.filter(st=>st.checkedIn).length}/{tm.students.length})</option>)}
-          </select>
-        </div>
-        {team&&<CheckinList team={team} onChk={onChk} canToggle={canToggle}/>}
+        <SearchInput value={srch} onChange={e=>setSrch(e.target.value)} placeholder="Search students by name…"/>
+        {q?(
+          <div style={{borderRadius:14,padding:"16px 18px",background:"#fafafb",border:"1px solid #ececef"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:14,color:"#0d0f16"}}>Search results</div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:700,color:s.txt2}}>{matches.length} {matches.length===1?"match":"matches"}</div>
+            </div>
+            {matches.length>0?(
+              <ul style={{listStyle:"none",display:"flex",flexDirection:"column",gap:4,padding:0,margin:0}}>
+                {matches.map(({team:tm,st})=><CheckinRow key={`${tm.id}-${st.id}`} team={tm} st={st} onChk={onChk} canToggle={canToggle} showTeam/>)}
+              </ul>
+            ):<div style={{padding:"8px 2px",fontSize:13,color:s.txt2}}>No students match "{srch.trim()}".</div>}
+          </div>
+        ):(<>
+          <div style={{marginBottom:16}}>
+            <select value={sel} onChange={e=>setSel(parseInt(e.target.value))} style={{width:"100%",maxWidth:280,padding:"12px 14px",background:"#fff",border:`1px solid ${s.border}`,borderRadius:12,color:s.txt,fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>
+              {liveTeams.map(tm=><option key={tm.id} value={tm.id}>{tm.name} ({tm.students.filter(st=>st.checkedIn).length}/{tm.students.length})</option>)}
+            </select>
+          </div>
+          {team&&<CheckinList team={team} onChk={onChk} canToggle={canToggle}/>}
+        </>)}
       </div>
     );
   }
